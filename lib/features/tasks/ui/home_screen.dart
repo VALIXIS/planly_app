@@ -9,79 +9,76 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final box = Hive.box<Task>('tasks'); // typed Hive box
+    final box = Hive.box<Task>('tasks');
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F3FF),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+
       appBar: AppBar(
         title: const Text("Planly"),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
       ),
+
       body: ValueListenableBuilder(
         valueListenable: box.listenable(),
         builder: (context, Box<Task> box, _) {
           final tasks = box.values.toList();
           final completed = tasks.where((t) => t.isCompleted).length;
+          final progress =
+              tasks.isEmpty ? 0.0 : completed / tasks.length;
 
           return Column(
             children: [
-              // 💎 Progress Card
-              Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFD1C4E9), Color(0xFFB39DDB)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.deepPurple.withOpacity(0.15),
-                      blurRadius: 15,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Today's Progress",
-                        style: TextStyle(color: Colors.white)),
-                    const SizedBox(height: 8),
-                    Text(
-                      "$completed / ${tasks.length} tasks completed",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+              // 💎 Modern Progress Card
+              Card(
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Today's Progress",
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    LinearProgressIndicator(
-                      value: tasks.isEmpty ? 0 : completed / tasks.length,
-                      backgroundColor: Colors.white30,
-                      valueColor:
-                          const AlwaysStoppedAnimation(Colors.white),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Text(
+                        "$completed / ${tasks.length} tasks completed",
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 14),
+                      LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(10),
+                        backgroundColor: const Color(0xFFEDE7F6),
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
               // 📋 Task List
               Expanded(
                 child: tasks.isEmpty
-                    ? const Center(child: Text("No tasks yet ✨"))
+                    ? Center(
+                        child: Text(
+                          "No tasks yet ✨",
+                          style:
+                              Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      )
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 12),
                         itemCount: tasks.length,
                         itemBuilder: (context, index) {
                           final task = tasks[index];
-                          final date = task.dueDate ?? DateTime.now();
+                          final date =
+                              task.dueDate ?? DateTime.now();
 
                           return Dismissible(
-                            key: Key(task.key.toString()), // unique Hive key
+                            key: Key(task.key.toString()),
                             direction: DismissDirection.endToStart,
                             onDismissed: (_) {
                               final deletedTask = task;
@@ -95,10 +92,10 @@ class HomeScreen extends StatelessWidget {
                                 messenger.hideCurrentSnackBar();
                                 messenger.showSnackBar(
                                   SnackBar(
-                                    content: const Text("Task deleted"),
-                                    duration: const Duration(seconds: 2),
-                                    behavior: SnackBarBehavior.floating,
-                                    margin: const EdgeInsets.all(12),
+                                    content:
+                                        const Text("Task deleted"),
+                                    duration:
+                                        const Duration(seconds: 2),
                                     action: SnackBarAction(
                                       label: "UNDO",
                                       onPressed: () {
@@ -109,104 +106,120 @@ class HomeScreen extends StatelessWidget {
                                 );
                               });
                             },
+
                             background: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              margin: const EdgeInsets.symmetric(
+                                  vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.red.shade300,
-                                borderRadius: BorderRadius.circular(18),
+                                color: Colors.red.shade400,
+                                borderRadius:
+                                    BorderRadius.circular(14),
                               ),
                               alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 20),
-                              child:
-                                  const Icon(Icons.delete, color: Colors.white),
+                              padding:
+                                  const EdgeInsets.only(right: 20),
+                              child: const Icon(Icons.delete,
+                                  color: Colors.white),
                             ),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 8),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: task.isCompleted
-                                    ? const Color(0xFFEDE7F6)
-                                    : const Color(0xFFF8F6FF),
-                                borderRadius: BorderRadius.circular(18),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.04),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () {
-                                      task.isCompleted = !task.isCompleted;
-                                      task.save(); // save typed Hive object
-                                    },
-                                    child: Container(
-                                      width: 26,
-                                      height: 26,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(8),
+
+                            child: Card(
+                              margin: const EdgeInsets.symmetric(
+                                  vertical: 6),
+                              child: ListTile(
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 10),
+
+                                // ✅ Checkbox (modern)
+                                leading: GestureDetector(
+                                  onTap: () {
+                                    task.isCompleted =
+                                        !task.isCompleted;
+                                    task.save();
+                                  },
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      borderRadius:
+                                          BorderRadius.circular(6),
+                                      color: task.isCompleted
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                          : Colors.transparent,
+                                      border: Border.all(
                                         color: task.isCompleted
-                                            ? const Color(0xFF9575CD)
-                                            : Colors.transparent,
-                                        border: Border.all(
-                                          color: task.isCompleted
-                                              ? const Color(0xFF9575CD)
-                                              : Colors.grey.shade400,
-                                          width: 2,
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                            : Colors.grey.shade400,
+                                        width: 1.8,
+                                      ),
+                                    ),
+                                    child: task.isCompleted
+                                        ? const Icon(Icons.check,
+                                            size: 16,
+                                            color: Colors.white)
+                                        : null,
+                                  ),
+                                ),
+
+                                title: Text(
+                                  task.title,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    decoration: task.isCompleted
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ),
+                                ),
+
+                                subtitle: Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: 6),
+                                  child: Row(
+                                    children: [
+                                      // 🏷 Category Chip
+                                      Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                              .withOpacity(0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                                  20),
+                                        ),
+                                        child: Text(
+                                          task.category ?? "General",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                          ),
                                         ),
                                       ),
-                                      child: task.isCompleted
-                                          ? const Icon(Icons.check,
-                                              size: 18, color: Colors.white)
-                                          : null,
-                                    ),
+
+                                      const SizedBox(width: 10),
+
+                                      // 📅 Date
+                                      Text(
+                                        DateFormat('dd MMM')
+                                            .format(date),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          task.title,
-                                          style: TextStyle(
-                                              decoration: task.isCompleted
-                                                  ? TextDecoration.lineThrough
-                                                  : null),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 10, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFB39DDB)
-                                                    .withOpacity(0.2),
-                                                borderRadius: BorderRadius.circular(20),
-                                              ),
-                                              child: Text(
-                                                task.category ?? "General",
-                                                style: const TextStyle(
-                                                    fontSize: 12,
-                                                    color: Color(0xFF7E57C2)),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              DateFormat('dd MMM').format(date),
-                                              style: const TextStyle(
-                                                  fontSize: 12, color: Colors.grey),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           );
@@ -217,17 +230,17 @@ class HomeScreen extends StatelessWidget {
           );
         },
       ),
+
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFFB39DDB),
         onPressed: () async {
-          // ✅ Return Task object from AddTaskScreen directly
           final Task? newTask = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+            MaterialPageRoute(
+                builder: (_) => const AddTaskScreen()),
           );
 
           if (newTask != null) {
-            box.add(newTask); // Add typed Task directly
+            box.add(newTask);
           }
         },
         child: const Icon(Icons.add),

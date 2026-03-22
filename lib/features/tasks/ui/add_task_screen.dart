@@ -21,14 +21,12 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     "Others",
   ];
 
-  // Dispose controller to avoid memory leaks
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
-  // 📅 Pick Date
   void pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -44,7 +42,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     }
   }
 
-  // 💾 Save Task and return to HomeScreen
   void saveTask() {
     String title = _controller.text.trim();
     if (title.isEmpty) return;
@@ -56,61 +53,83 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       isCompleted: false,
     );
 
-    Navigator.pop(context, newTask); // Return Task object directly
+    Navigator.pop(context, newTask);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F3FF),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+
       appBar: AppBar(
         title: const Text("Add Task"),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
       ),
+
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Task Title
+            // 🧾 Title
+            Text(
+              "Task Details",
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+
+            // ✏️ Task Title Input (Modern)
             TextField(
               controller: _controller,
               decoration: InputDecoration(
-                labelText: "Task Title",
+                hintText: "Enter task title...",
                 filled: true,
-                fillColor: const Color(0xFFF8F6FF),
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
                 ),
               ),
             ),
-            const SizedBox(height: 16),
 
-            // Date Picker
-            Row(
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFB39DDB),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+            const SizedBox(height: 20),
+
+            // 📅 Date Picker (Modern Row Card)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today,
+                          size: 18,
+                          color:
+                              Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 10),
+                      Text(
+                        DateFormat('dd MMM yyyy')
+                            .format(selectedDate),
+                      ),
+                    ],
                   ),
-                  onPressed: pickDate,
-                  child: const Text("Pick Date"),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  DateFormat('dd-MM-yyyy').format(selectedDate),
-                  style: const TextStyle(color: Colors.black87),
-                ),
-              ],
+                  TextButton(
+                    onPressed: pickDate,
+                    child: const Text("Change"),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
 
-            // Category Dropdown
+            const SizedBox(height: 20),
+
+            // 🏷 Category Dropdown (Modern)
             DropdownButtonFormField<String>(
               value: selectedCategory,
               items: categories.map((cat) {
@@ -125,30 +144,35 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 });
               },
               decoration: InputDecoration(
-                labelText: "Category",
                 filled: true,
-                fillColor: const Color(0xFFF8F6FF),
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
                 ),
               ),
             ),
-            const SizedBox(height: 24),
 
-            // Save Button
+            const Spacer(),
+
+            // 🚀 Save Button (Professional)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
+                onPressed: saveTask,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9575CD),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                onPressed: saveTask,
-                child: const Text("Save Task"),
+                child: const Text(
+                  "Save Task",
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             ),
           ],
