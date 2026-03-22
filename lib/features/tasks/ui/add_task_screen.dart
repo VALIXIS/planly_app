@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 
 class AddTaskScreen extends StatefulWidget {
-  final Task? task; // ✅ NEW
+  final Task? task;
 
   const AddTaskScreen({super.key, this.task});
 
@@ -13,11 +13,13 @@ class AddTaskScreen extends StatefulWidget {
 
 class _AddTaskScreenState extends State<AddTaskScreen> {
   final TextEditingController _controller = TextEditingController();
-  DateTime selectedDate = DateTime.now();
+  final TextEditingController _descController = TextEditingController();
 
+  DateTime selectedDate = DateTime.now();
   TimeOfDay selectedTime = TimeOfDay.now();
 
   String selectedCategory = "Personal";
+  String selectedPriority = "Medium"; // ✅ NEW
 
   final List<String> categories = [
     "Work",
@@ -26,15 +28,18 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     "Others",
   ];
 
+  final List<String> priorities = ["High", "Medium", "Low"]; // ✅ NEW
+
   @override
   void initState() {
     super.initState();
 
-    // ✅ PREFILL WHEN EDITING
     if (widget.task != null) {
       final task = widget.task!;
       _controller.text = task.title;
       selectedCategory = task.category ?? "Personal";
+      _descController.text = task.description ?? "";
+      selectedPriority = task.priority; // ✅ PREFILL
 
       if (task.dueDate != null) {
         selectedDate = task.dueDate!;
@@ -46,6 +51,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _descController.dispose();
     super.dispose();
   }
 
@@ -90,21 +96,23 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     );
 
     if (widget.task != null) {
-      // ✅ EDIT MODE
       final task = widget.task!;
       task.title = title;
       task.category = selectedCategory;
       task.dueDate = combinedDateTime;
+      task.description = _descController.text.trim();
+      task.priority = selectedPriority; // ✅ NEW
       task.save();
 
       Navigator.pop(context);
     } else {
-      // ✅ ADD MODE
       final newTask = Task(
         title: title,
         category: selectedCategory,
         dueDate: combinedDateTime,
         isCompleted: false,
+        description: _descController.text.trim(),
+        priority: selectedPriority, // ✅ NEW
       );
 
       Navigator.pop(context, newTask);
@@ -116,150 +124,202 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     final isEditing = widget.task != null;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
 
       appBar: AppBar(
         title: Text(isEditing ? "Edit Task" : "Add Task"),
       ),
 
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Task Details",
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-
-            // ✏️ Title
-            TextField(
-              controller: _controller,
-              decoration: InputDecoration(
-                hintText: "Enter task title...",
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Task Details",
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-              ),
-            ),
+                const SizedBox(height: 16),
 
-            const SizedBox(height: 20),
-
-            // 📅 Date
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.calendar_today,
-                          size: 18,
-                          color:
-                              Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 10),
-                      Text(DateFormat('dd MMM yyyy').format(selectedDate)),
-                    ],
+                // ✏️ Title
+                TextField(
+                  controller: _controller,
+                  decoration: InputDecoration(
+                    hintText: "Enter task title...",
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
-                  TextButton(
-                    onPressed: pickDate,
-                    child: const Text("Change"),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ⏰ Time
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.access_time,
-                          size: 18,
-                          color:
-                              Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 10),
-                      Text(selectedTime.format(context)),
-                    ],
-                  ),
-                  TextButton(
-                    onPressed: pickTime,
-                    child: const Text("Change"),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 🏷 Category
-            DropdownButtonFormField<String>(
-              value: selectedCategory,
-              items: categories.map((cat) {
-                return DropdownMenuItem(
-                  value: cat,
-                  child: Text(cat),
-                );
-              }).toList(),
-              onChanged: (val) {
-                setState(() {
-                  selectedCategory = val!;
-                });
-              },
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
                 ),
-              ),
-            ),
 
-            const Spacer(),
+                const SizedBox(height: 16),
 
-            // 🚀 Save
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: saveTask,
-                style: ElevatedButton.styleFrom(
+                // 📝 Description
+                TextField(
+                  controller: _descController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: "Add description...",
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // 📅 Date
+                Container(
                   padding:
-                      const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
                   ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_today,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 10),
+                          Text(DateFormat('dd MMM yyyy').format(selectedDate)),
+                        ],
+                      ),
+                      TextButton(
+                        onPressed: pickDate,
+                        child: const Text("Change"),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Text(
-                  isEditing ? "Update Task" : "Save Task",
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+
+                const SizedBox(height: 16),
+
+                // ⏰ Time
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.access_time,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 10),
+                          Text(selectedTime.format(context)),
+                        ],
+                      ),
+                      TextButton(
+                        onPressed: pickTime,
+                        child: const Text("Change"),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+
+                const SizedBox(height: 20),
+
+                // 🏷 Category
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  items: categories.map((cat) {
+                    return DropdownMenuItem(
+                      value: cat,
+                      child: Text(cat),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      selectedCategory = val!;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // 🔥 PRIORITY (NEW)
+                DropdownButtonFormField<String>(
+                  value: selectedPriority,
+                  items: priorities.map((p) {
+                    return DropdownMenuItem(
+                      value: p,
+                      child: Text(p),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      selectedPriority = val!;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                // 🚀 Save Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: saveTask,
+                    style: ElevatedButton.styleFrom(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      isEditing ? "Update Task" : "Save Task",
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

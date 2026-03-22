@@ -4,8 +4,29 @@ import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 import 'add_task_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+enum FilterType { all, today, upcoming, pending, completed }
+
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  FilterType selectedFilter = FilterType.all;
+  String searchQuery = "";
+
+  Color getPriorityColor(String priority) {
+    switch (priority) {
+      case "High":
+        return Colors.red;
+      case "Low":
+        return Colors.green;
+      default:
+        return Colors.orange;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,42 +34,103 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-
       appBar: AppBar(
         title: const Text("Planly"),
       ),
-
       body: ValueListenableBuilder(
         valueListenable: box.listenable(),
         builder: (context, Box<Task> box, _) {
-          final tasks = box.values.toList();
+          final allTasks = box.values.toList();
+          final now = DateTime.now();
+
+          List<Task> tasks = [];
+
+          if (selectedFilter == FilterType.all) {
+            tasks = allTasks;
+          } else if (selectedFilter == FilterType.today) {
+            tasks = allTasks.where((task) {
+              final due = task.dueDate;
+              if (due == null) return false;
+              return due.year == now.year &&
+                  due.month == now.month &&
+                  due.day == now.day;
+            }).toList();
+          } else if (selectedFilter == FilterType.upcoming) {
+            tasks = allTasks.where((task) {
+              final due = task.dueDate;
+              if (due == null) return false;
+              return due.isAfter(now);
+            }).toList();
+          } else if (selectedFilter == FilterType.pending) {
+            tasks = allTasks.where((t) => !t.isCompleted).toList();
+          } else if (selectedFilter == FilterType.completed) {
+            tasks = allTasks.where((t) => t.isCompleted).toList();
+          }
+
+          if (searchQuery.isNotEmpty) {
+            tasks = tasks.where((task) {
+              return task.title
+                  .toLowerCase()
+                  .contains(searchQuery.toLowerCase());
+            }).toList();
+          }
+
           final completed = tasks.where((t) => t.isCompleted).length;
           final progress =
               tasks.isEmpty ? 0.0 : completed / tasks.length;
 
           return Column(
             children: [
-              // 💎 Progress Card
+              // 🔍 COMPACT SEARCH
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: TextField(
+                  onChanged: (value) {
+                    setState(() {
+                      searchQuery = value;
+                    });
+                  },
+                  style: const TextStyle(fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: "Search tasks...",
+                    hintStyle: const TextStyle(fontSize: 13),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+
+              // 💎 COMPACT PROGRESS
               Card(
-                margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
                 child: Padding(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        "Today's Progress",
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 6),
+                      Text("Tasks Overview",
+                          style: Theme.of(context).textTheme.bodySmall),
+                      const SizedBox(height: 4),
                       Text(
                         "$completed / ${tasks.length} tasks completed",
-                        style: Theme.of(context).textTheme.titleLarge,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 10),
                       LinearProgressIndicator(
                         value: progress,
-                        minHeight: 8,
+                        minHeight: 6,
                         borderRadius: BorderRadius.circular(10),
                         backgroundColor: const Color(0xFFEDE7F6),
                         color: Theme.of(context).colorScheme.primary,
@@ -58,15 +140,36 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
 
-              // 📋 Task List
+              // 🔥 FILTERS
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      filterChip("All", FilterType.all),
+                      const SizedBox(width: 6),
+                      filterChip("Today", FilterType.today),
+                      const SizedBox(width: 6),
+                      filterChip("Upcoming", FilterType.upcoming),
+                      const SizedBox(width: 6),
+                      filterChip("Pending", FilterType.pending),
+                      const SizedBox(width: 6),
+                      filterChip("Done", FilterType.completed),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 6),
+
+              // 📋 TASK LIST
               Expanded(
                 child: tasks.isEmpty
                     ? Center(
-                        child: Text(
-                          "No tasks yet ✨",
-                          style:
-                              Theme.of(context).textTheme.bodyMedium,
-                        ),
+                        child: Text("No tasks ✨",
+                            style:
+                                Theme.of(context).textTheme.bodyMedium),
                       )
                     : ListView.builder(
                         padding:
@@ -94,8 +197,6 @@ class HomeScreen extends StatelessWidget {
                                   SnackBar(
                                     content:
                                         const Text("Task deleted"),
-                                    duration:
-                                        const Duration(seconds: 2),
                                     action: SnackBarAction(
                                       label: "UNDO",
                                       onPressed: () {
@@ -109,11 +210,11 @@ class HomeScreen extends StatelessWidget {
 
                             background: Container(
                               margin: const EdgeInsets.symmetric(
-                                  vertical: 6),
+                                  vertical: 4),
                               decoration: BoxDecoration(
                                 color: Colors.red.shade400,
                                 borderRadius:
-                                    BorderRadius.circular(14),
+                                    BorderRadius.circular(12),
                               ),
                               alignment: Alignment.centerRight,
                               padding:
@@ -124,9 +225,12 @@ class HomeScreen extends StatelessWidget {
 
                             child: Card(
                               margin: const EdgeInsets.symmetric(
-                                  vertical: 6),
+                                  vertical: 4),
                               child: ListTile(
-                                // ✅ NEW: TAP TO EDIT
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 8),
+
                                 onTap: () async {
                                   await Navigator.push(
                                     context,
@@ -137,12 +241,6 @@ class HomeScreen extends StatelessWidget {
                                   );
                                 },
 
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 10),
-
-                                // ✅ Checkbox
                                 leading: GestureDetector(
                                   onTap: () {
                                     task.isCompleted =
@@ -150,11 +248,11 @@ class HomeScreen extends StatelessWidget {
                                     task.save();
                                   },
                                   child: Container(
-                                    width: 24,
-                                    height: 24,
+                                    width: 22,
+                                    height: 22,
                                     decoration: BoxDecoration(
                                       borderRadius:
-                                          BorderRadius.circular(6),
+                                          BorderRadius.circular(5),
                                       color: task.isCompleted
                                           ? Theme.of(context)
                                               .colorScheme
@@ -166,12 +264,12 @@ class HomeScreen extends StatelessWidget {
                                                 .colorScheme
                                                 .primary
                                             : Colors.grey.shade400,
-                                        width: 1.8,
+                                        width: 1.5,
                                       ),
                                     ),
                                     child: task.isCompleted
                                         ? const Icon(Icons.check,
-                                            size: 16,
+                                            size: 14,
                                             color: Colors.white)
                                         : null,
                                   ),
@@ -180,7 +278,7 @@ class HomeScreen extends StatelessWidget {
                                 title: Text(
                                   task.title,
                                   style: TextStyle(
-                                    fontWeight: FontWeight.w500,
+                                    fontSize: 15,
                                     decoration: task.isCompleted
                                         ? TextDecoration.lineThrough
                                         : null,
@@ -189,45 +287,61 @@ class HomeScreen extends StatelessWidget {
 
                                 subtitle: Padding(
                                   padding:
-                                      const EdgeInsets.only(top: 6),
-                                  child: Row(
+                                      const EdgeInsets.only(top: 4),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      // 🏷 Category
-                                      Container(
-                                        padding:
-                                            const EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                                vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary
-                                              .withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(
-                                                  20),
-                                        ),
-                                        child: Text(
-                                          task.category ?? "General",
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary,
+                                      Row(
+                                        children: [
+                                          // 🔥 BADGE
+                                          Container(
+                                            padding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: getPriorityColor(
+                                                      task.priority)
+                                                  .withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: Text(
+                                              task.priority.toUpperCase(),
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: getPriorityColor(
+                                                    task.priority),
+                                              ),
+                                            ),
+                                          ),
+
+                                          const SizedBox(width: 6),
+
+                                          Text(
+                                            DateFormat('dd MMM')
+                                                .format(date),
+                                            style: const TextStyle(
+                                                fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
+
+                                      if (task.description != null &&
+                                          task.description!.isNotEmpty)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            task.description!,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey,
+                                            ),
                                           ),
                                         ),
-                                      ),
-
-                                      const SizedBox(width: 10),
-
-                                      // 📅 Date
-                                      Text(
-                                        DateFormat('dd MMM')
-                                            .format(date),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall,
-                                      ),
                                     ],
                                   ),
                                 ),
@@ -255,6 +369,36 @@ class HomeScreen extends StatelessWidget {
           }
         },
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget filterChip(String label, FilterType type) {
+    final isSelected = selectedFilter == type;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedFilter = type;
+        });
+      },
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: isSelected ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }

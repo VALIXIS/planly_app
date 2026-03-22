@@ -16,10 +16,18 @@ class Task extends HiveObject {
   @HiveField(3)
   bool isCompleted;
 
+  @HiveField(4)
+  String? description;
+
+  @HiveField(5)
+  String priority; // ✅ NEW
+
   Task({
     required this.title,
     this.category,
     this.dueDate,
     this.isCompleted = false,
+    this.description,
+    this.priority = "Medium", // ✅ DEFAULT
   });
 }
