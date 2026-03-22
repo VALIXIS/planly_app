@@ -13,10 +13,12 @@ void main() async {
 
   await Hive.initFlutter();
   Hive.registerAdapter(TaskAdapter());
-  final box = await Hive.openBox<Task>('tasks');
 
-  // ⚠️ Keep this only for development
-  await box.clear();
+  // ✅ Open Hive box
+  await Hive.openBox<Task>('tasks');
+
+  // ❌ Removed Notification init
+  // await NotificationService.init();
 
   runApp(const MyApp());
 }
@@ -34,7 +36,6 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
 
-        // 🎨 PROFESSIONAL COLOR SYSTEM
         colorScheme: const ColorScheme(
           brightness: Brightness.light,
           primary: Color(0xFF7C4DFF),
@@ -51,7 +52,6 @@ class MyApp extends StatelessWidget {
 
         scaffoldBackgroundColor: const Color(0xFFF8F7FC),
 
-        // 🧾 APP BAR
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -63,7 +63,6 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
-        // ✅ FIXED (CardTheme → CardThemeData)
         cardTheme: CardThemeData(
           elevation: 1.5,
           shadowColor: Colors.black12,
@@ -72,7 +71,6 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
-        // 💬 SNACKBAR
         snackBarTheme: SnackBarThemeData(
           behavior: SnackBarBehavior.floating,
           backgroundColor: const Color(0xFF2E2E2E),
@@ -82,13 +80,11 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
-        // ➕ FAB
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: Color(0xFF7C4DFF),
           elevation: 2,
         ),
 
-        // 🔤 TEXT
         textTheme: const TextTheme(
           titleLarge: TextStyle(
             fontSize: 18,
@@ -129,7 +125,6 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: screens[currentIndex],
 
-      // 🔥 MODERN NAVIGATION
       bottomNavigationBar: NavigationBar(
         height: 70,
         selectedIndex: currentIndex,

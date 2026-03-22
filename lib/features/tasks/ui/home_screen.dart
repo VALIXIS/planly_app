@@ -28,7 +28,7 @@ class HomeScreen extends StatelessWidget {
 
           return Column(
             children: [
-              // 💎 Modern Progress Card
+              // 💎 Progress Card
               Card(
                 margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Padding(
@@ -126,12 +126,23 @@ class HomeScreen extends StatelessWidget {
                               margin: const EdgeInsets.symmetric(
                                   vertical: 6),
                               child: ListTile(
+                                // ✅ NEW: TAP TO EDIT
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          AddTaskScreen(task: task),
+                                    ),
+                                  );
+                                },
+
                                 contentPadding:
                                     const EdgeInsets.symmetric(
                                         horizontal: 16,
                                         vertical: 10),
 
-                                // ✅ Checkbox (modern)
+                                // ✅ Checkbox
                                 leading: GestureDetector(
                                   onTap: () {
                                     task.isCompleted =
@@ -181,7 +192,7 @@ class HomeScreen extends StatelessWidget {
                                       const EdgeInsets.only(top: 6),
                                   child: Row(
                                     children: [
-                                      // 🏷 Category Chip
+                                      // 🏷 Category
                                       Container(
                                         padding:
                                             const EdgeInsets.symmetric(

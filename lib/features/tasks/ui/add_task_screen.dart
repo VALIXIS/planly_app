@@ -3,7 +3,9 @@ import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 
 class AddTaskScreen extends StatefulWidget {
-  const AddTaskScreen({super.key});
+  final Task? task; // ✅ NEW
+
+  const AddTaskScreen({super.key, this.task});
 
   @override
   State<AddTaskScreen> createState() => _AddTaskScreenState();
@@ -12,6 +14,9 @@ class AddTaskScreen extends StatefulWidget {
 class _AddTaskScreenState extends State<AddTaskScreen> {
   final TextEditingController _controller = TextEditingController();
   DateTime selectedDate = DateTime.now();
+
+  TimeOfDay selectedTime = TimeOfDay.now();
+
   String selectedCategory = "Personal";
 
   final List<String> categories = [
@@ -20,6 +25,23 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     "Shopping",
     "Others",
   ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ✅ PREFILL WHEN EDITING
+    if (widget.task != null) {
+      final task = widget.task!;
+      _controller.text = task.title;
+      selectedCategory = task.category ?? "Personal";
+
+      if (task.dueDate != null) {
+        selectedDate = task.dueDate!;
+        selectedTime = TimeOfDay.fromDateTime(task.dueDate!);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -42,27 +64,62 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     }
   }
 
+  void pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: selectedTime,
+    );
+
+    if (picked != null) {
+      setState(() {
+        selectedTime = picked;
+      });
+    }
+  }
+
   void saveTask() {
     String title = _controller.text.trim();
     if (title.isEmpty) return;
 
-    final newTask = Task(
-      title: title,
-      category: selectedCategory,
-      dueDate: selectedDate,
-      isCompleted: false,
+    final combinedDateTime = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+      selectedTime.hour,
+      selectedTime.minute,
     );
 
-    Navigator.pop(context, newTask);
+    if (widget.task != null) {
+      // ✅ EDIT MODE
+      final task = widget.task!;
+      task.title = title;
+      task.category = selectedCategory;
+      task.dueDate = combinedDateTime;
+      task.save();
+
+      Navigator.pop(context);
+    } else {
+      // ✅ ADD MODE
+      final newTask = Task(
+        title: title,
+        category: selectedCategory,
+        dueDate: combinedDateTime,
+        isCompleted: false,
+      );
+
+      Navigator.pop(context, newTask);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.task != null;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
 
       appBar: AppBar(
-        title: const Text("Add Task"),
+        title: Text(isEditing ? "Edit Task" : "Add Task"),
       ),
 
       body: Padding(
@@ -70,22 +127,21 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🧾 Title
             Text(
               "Task Details",
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
 
-            // ✏️ Task Title Input (Modern)
+            // ✏️ Title
             TextField(
               controller: _controller,
               decoration: InputDecoration(
                 hintText: "Enter task title...",
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
@@ -95,10 +151,10 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
             const SizedBox(height: 20),
 
-            // 📅 Date Picker (Modern Row Card)
+            // 📅 Date
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 14),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
@@ -113,10 +169,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                           color:
                               Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 10),
-                      Text(
-                        DateFormat('dd MMM yyyy')
-                            .format(selectedDate),
-                      ),
+                      Text(DateFormat('dd MMM yyyy').format(selectedDate)),
                     ],
                   ),
                   TextButton(
@@ -127,9 +180,40 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               ),
             ),
 
+            const SizedBox(height: 16),
+
+            // ⏰ Time
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.access_time,
+                          size: 18,
+                          color:
+                              Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 10),
+                      Text(selectedTime.format(context)),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed: pickTime,
+                    child: const Text("Change"),
+                  ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 20),
 
-            // 🏷 Category Dropdown (Modern)
+            // 🏷 Category
             DropdownButtonFormField<String>(
               value: selectedCategory,
               items: categories.map((cat) {
@@ -146,8 +230,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
@@ -157,7 +241,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
             const Spacer(),
 
-            // 🚀 Save Button (Professional)
+            // 🚀 Save
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -169,9 +253,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text(
-                  "Save Task",
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                child: Text(
+                  isEditing ? "Update Task" : "Save Task",
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
             ),
