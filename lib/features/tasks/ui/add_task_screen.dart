@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../models/task_model.dart';
 
 class AddTaskScreen extends StatefulWidget {
   const AddTaskScreen({super.key});
@@ -10,7 +11,6 @@ class AddTaskScreen extends StatefulWidget {
 
 class _AddTaskScreenState extends State<AddTaskScreen> {
   final TextEditingController _controller = TextEditingController();
-
   DateTime selectedDate = DateTime.now();
   String selectedCategory = "Personal";
 
@@ -21,6 +21,14 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     "Others",
   ];
 
+  // Dispose controller to avoid memory leaks
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  // 📅 Pick Date
   void pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -36,37 +44,36 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     }
   }
 
+  // 💾 Save Task and return to HomeScreen
   void saveTask() {
     String title = _controller.text.trim();
-
     if (title.isEmpty) return;
 
-    Navigator.pop(context, {
-      "title": title,
-      "category": selectedCategory,
-      "date": selectedDate.toIso8601String(),
-      "isDone": false,
-    });
+    final newTask = Task(
+      title: title,
+      category: selectedCategory,
+      dueDate: selectedDate,
+      isCompleted: false,
+    );
+
+    Navigator.pop(context, newTask); // Return Task object directly
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F3FF), // 💜 soft bg
-
+      backgroundColor: const Color(0xFFF5F3FF),
       appBar: AppBar(
         title: const Text("Add Task"),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-
       body: Padding(
         padding: const EdgeInsets.all(16),
-
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 📝 Task Title (soft input)
+            // Task Title
             TextField(
               controller: _controller,
               decoration: InputDecoration(
@@ -79,10 +86,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
 
-            // 📅 Date Picker (soft button)
+            // Date Picker
             Row(
               children: [
                 ElevatedButton(
@@ -102,10 +108,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
 
-            // 🏷 Category Dropdown (soft box)
+            // Category Dropdown
             DropdownButtonFormField<String>(
               value: selectedCategory,
               items: categories.map((cat) {
@@ -129,10 +134,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
 
-            // 💾 Save Button (soft full width)
+            // Save Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
