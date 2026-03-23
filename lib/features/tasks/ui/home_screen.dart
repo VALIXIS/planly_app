@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../main.dart' show rootScaffoldMessengerKey;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import '../models/task_model.dart';
@@ -77,6 +78,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     .contains(searchQuery.toLowerCase()))
                 .toList();
           }
+
+          // ── Priority sort: High → Medium → Low ────────
+          const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
+          tasks.sort((a, b) =>
+              (priorityOrder[a.priority] ?? 1)
+                  .compareTo(priorityOrder[b.priority] ?? 1));
 
           final completed = tasks.where((t) => t.isCompleted).length;
           final progress =
@@ -183,32 +190,38 @@ class _HomeScreenState extends State<HomeScreen> {
                             key: Key(task.key.toString()),
                             direction: DismissDirection.endToStart,
                             onDismissed: (_) async {
-                              final deletedTask = task;
+                              // ✅ Save a copy before deleting
+                              final deletedTask = Task(
+                                title: task.title,
+                                category: task.category,
+                                dueDate: task.dueDate,
+                                isCompleted: task.isCompleted,
+                                description: task.description,
+                                priority: task.priority,
+                              );
 
-                              // 🔔 Cancel notification on delete
+                              // 🔔 Cancel notification
                               await NotificationService()
-                                  .cancelNotification(
-                                      task.key as int);
+                                  .cancelNotification(task.key as int);
 
-                              box.deleteAt(index);
+                              // ✅ Delete using task key — safe even with filters
+                              await task.delete();
 
-                              final messenger =
-                                  ScaffoldMessenger.of(context);
-                              WidgetsBinding.instance
-                                  .addPostFrameCallback((_) {
-                                messenger.hideCurrentSnackBar();
-                                messenger.showSnackBar(
+                              // ✅ Show snackbar with auto-dismiss
+                              rootScaffoldMessengerKey.currentState
+                                ?..hideCurrentSnackBar()
+                                ..showSnackBar(
                                   SnackBar(
                                     content: const Text("Task deleted"),
+                                    duration: const Duration(seconds: 3),
                                     action: SnackBarAction(
                                       label: "UNDO",
-                                      onPressed: () {
-                                        box.add(deletedTask);
+                                      onPressed: () async {
+                                        await box.add(deletedTask);
                                       },
                                     ),
                                   ),
                                 );
-                              });
                             },
                             background: Container(
                               margin:
