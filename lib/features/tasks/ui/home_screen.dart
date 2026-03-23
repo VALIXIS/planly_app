@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 import 'add_task_screen.dart';
+import '../../../services/notification_service.dart';
 
 enum FilterType { all, today, upcoming, pending, completed }
 
@@ -31,20 +32,21 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final box = Hive.box<Task>('tasks');
+    // Detect dark mode so we can adjust card/tile colors
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final searchFill = isDark ? const Color(0xFF2A2A2A) : Colors.white;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text("Planly"),
-      ),
+      // ℹ️ AppBar is now handled by MainScreen (includes theme toggle)
       body: ValueListenableBuilder(
         valueListenable: box.listenable(),
         builder: (context, Box<Task> box, _) {
           final allTasks = box.values.toList();
           final now = DateTime.now();
 
+          // ── Filter logic ──────────────────────────────
           List<Task> tasks = [];
-
           if (selectedFilter == FilterType.all) {
             tasks = allTasks;
           } else if (selectedFilter == FilterType.today) {
@@ -67,12 +69,13 @@ class _HomeScreenState extends State<HomeScreen> {
             tasks = allTasks.where((t) => t.isCompleted).toList();
           }
 
+          // ── Search filter ─────────────────────────────
           if (searchQuery.isNotEmpty) {
-            tasks = tasks.where((task) {
-              return task.title
-                  .toLowerCase()
-                  .contains(searchQuery.toLowerCase());
-            }).toList();
+            tasks = tasks
+                .where((task) => task.title
+                    .toLowerCase()
+                    .contains(searchQuery.toLowerCase()))
+                .toList();
           }
 
           final completed = tasks.where((t) => t.isCompleted).length;
@@ -81,16 +84,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
           return Column(
             children: [
-              // 🔍 COMPACT SEARCH
+              // 🔍 Search bar
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                 child: TextField(
-                  onChanged: (value) {
-                    setState(() {
-                      searchQuery = value;
-                    });
-                  },
+                  onChanged: (value) =>
+                      setState(() => searchQuery = value),
                   style: const TextStyle(fontSize: 14),
                   decoration: InputDecoration(
                     hintText: "Search tasks...",
@@ -98,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     prefixIcon: const Icon(Icons.search, size: 18),
                     isDense: true,
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: searchFill,
                     contentPadding:
                         const EdgeInsets.symmetric(vertical: 10),
                     border: OutlineInputBorder(
@@ -109,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // 💎 COMPACT PROGRESS
+              // 📊 Progress card
               Card(
                 margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
                 child: Padding(
@@ -132,7 +131,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         value: progress,
                         minHeight: 6,
                         borderRadius: BorderRadius.circular(10),
-                        backgroundColor: const Color(0xFFEDE7F6),
+                        backgroundColor: isDark
+                            ? Colors.white12
+                            : const Color(0xFFEDE7F6),
                         color: Theme.of(context).colorScheme.primary,
                       ),
                     ],
@@ -140,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // 🔥 FILTERS
+              // 🔥 Filter chips
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: SingleChildScrollView(
@@ -163,13 +164,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 6),
 
-              // 📋 TASK LIST
+              // 📋 Task list
               Expanded(
                 child: tasks.isEmpty
                     ? Center(
                         child: Text("No tasks ✨",
-                            style:
-                                Theme.of(context).textTheme.bodyMedium),
+                            style: Theme.of(context).textTheme.bodyMedium),
                       )
                     : ListView.builder(
                         padding:
@@ -177,26 +177,29 @@ class _HomeScreenState extends State<HomeScreen> {
                         itemCount: tasks.length,
                         itemBuilder: (context, index) {
                           final task = tasks[index];
-                          final date =
-                              task.dueDate ?? DateTime.now();
+                          final date = task.dueDate ?? DateTime.now();
 
                           return Dismissible(
                             key: Key(task.key.toString()),
                             direction: DismissDirection.endToStart,
-                            onDismissed: (_) {
+                            onDismissed: (_) async {
                               final deletedTask = task;
+
+                              // 🔔 Cancel notification on delete
+                              await NotificationService()
+                                  .cancelNotification(
+                                      task.key as int);
+
                               box.deleteAt(index);
 
                               final messenger =
                                   ScaffoldMessenger.of(context);
-
                               WidgetsBinding.instance
                                   .addPostFrameCallback((_) {
                                 messenger.hideCurrentSnackBar();
                                 messenger.showSnackBar(
                                   SnackBar(
-                                    content:
-                                        const Text("Task deleted"),
+                                    content: const Text("Task deleted"),
                                     action: SnackBarAction(
                                       label: "UNDO",
                                       onPressed: () {
@@ -207,30 +210,25 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               });
                             },
-
                             background: Container(
-                              margin: const EdgeInsets.symmetric(
-                                  vertical: 4),
+                              margin:
+                                  const EdgeInsets.symmetric(vertical: 4),
                               decoration: BoxDecoration(
                                 color: Colors.red.shade400,
-                                borderRadius:
-                                    BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                               alignment: Alignment.centerRight,
-                              padding:
-                                  const EdgeInsets.only(right: 20),
+                              padding: const EdgeInsets.only(right: 20),
                               child: const Icon(Icons.delete,
                                   color: Colors.white),
                             ),
-
                             child: Card(
-                              margin: const EdgeInsets.symmetric(
-                                  vertical: 4),
+                              margin:
+                                  const EdgeInsets.symmetric(vertical: 4),
                               child: ListTile(
                                 contentPadding:
                                     const EdgeInsets.symmetric(
                                         horizontal: 14, vertical: 8),
-
                                 onTap: () async {
                                   await Navigator.push(
                                     context,
@@ -241,10 +239,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                   );
                                 },
 
+                                // ✅ Checkbox
                                 leading: GestureDetector(
                                   onTap: () {
-                                    task.isCompleted =
-                                        !task.isCompleted;
+                                    task.isCompleted = !task.isCompleted;
                                     task.save();
                                   },
                                   child: Container(
@@ -286,59 +284,72 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
 
                                 subtitle: Padding(
-                                  padding:
-                                      const EdgeInsets.only(top: 4),
+                                  padding: const EdgeInsets.only(top: 4),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
-                                          // 🔥 BADGE
+                                          // 🔥 Priority badge
                                           Container(
-                                            padding:
-                                                const EdgeInsets.symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 2),
+                                            padding: const EdgeInsets
+                                                .symmetric(
+                                                horizontal: 6,
+                                                vertical: 2),
                                             decoration: BoxDecoration(
                                               color: getPriorityColor(
                                                       task.priority)
-                                                  .withOpacity(0.1),
+                                                  .withOpacity(0.12),
                                               borderRadius:
-                                                  BorderRadius.circular(10),
+                                                  BorderRadius.circular(
+                                                      10),
                                             ),
                                             child: Text(
                                               task.priority.toUpperCase(),
                                               style: TextStyle(
                                                 fontSize: 10,
-                                                fontWeight: FontWeight.w600,
+                                                fontWeight:
+                                                    FontWeight.w600,
                                                 color: getPriorityColor(
                                                     task.priority),
                                               ),
                                             ),
                                           ),
-
                                           const SizedBox(width: 6),
-
+                                          // 📅 Date + time
+                                          Icon(
+                                              Icons
+                                                  .access_time_rounded,
+                                              size: 11,
+                                              color: Colors.grey
+                                                  .shade500),
+                                          const SizedBox(width: 3),
                                           Text(
-                                            DateFormat('dd MMM')
+                                            DateFormat('dd MMM · hh:mm a')
                                                 .format(date),
-                                            style: const TextStyle(
-                                                fontSize: 11),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color:
+                                                  Colors.grey.shade500,
+                                            ),
                                           ),
                                         ],
                                       ),
-
                                       if (task.description != null &&
                                           task.description!.isNotEmpty)
                                         Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 2),
+                                          padding: const EdgeInsets.only(
+                                              top: 2),
                                           child: Text(
                                             task.description!,
-                                            style: const TextStyle(
+                                            maxLines: 1,
+                                            overflow:
+                                                TextOverflow.ellipsis,
+                                            style: TextStyle(
                                               fontSize: 12,
-                                              color: Colors.grey,
+                                              color:
+                                                  Colors.grey.shade500,
                                             ),
                                           ),
                                         ),
@@ -357,16 +368,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
 
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final Task? newTask = await Navigator.push(
+        onPressed: () {
+          // ✅ AddTaskScreen now saves directly to Hive — no need to box.add() here
+          Navigator.push(
             context,
-            MaterialPageRoute(
-                builder: (_) => const AddTaskScreen()),
+            MaterialPageRoute(builder: (_) => const AddTaskScreen()),
           );
-
-          if (newTask != null) {
-            box.add(newTask);
-          }
         },
         child: const Icon(Icons.add),
       ),
@@ -375,27 +382,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget filterChip(String label, FilterType type) {
     final isSelected = selectedFilter == type;
-
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          selectedFilter = type;
-        });
-      },
+      onTap: () => setState(() => selectedFilter = type),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected
               ? Theme.of(context).colorScheme.primary
-              : Colors.grey.shade200,
+              : Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF2A2A2A)
+                  : Colors.grey.shade200,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            color: isSelected ? Colors.white : Colors.black87,
+            color: isSelected
+                ? Colors.white
+                : Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white70
+                    : Colors.black87,
             fontWeight: FontWeight.w500,
           ),
         ),

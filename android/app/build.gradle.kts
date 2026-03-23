@@ -6,25 +6,26 @@ plugins {
 
 android {
     namespace = "com.example.planly"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+
+    // ✅ Fix 1: Raised to 36 (required by path_provider_android)
+    compileSdk = 36
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
 
-        // 🔥 ADD THIS LINE (IMPORTANT)
+        // ✅ Fix 2: Required by flutter_local_notifications
         isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "1.8"
     }
 
     defaultConfig {
         applicationId = "com.example.planly"
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -36,11 +37,11 @@ android {
     }
 }
 
-flutter {
-    source = "../.."
+dependencies {
+    // ✅ Required for core library desugaring (flutter_local_notifications needs this)
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
-dependencies {
-    // 🔥 ADD THIS BLOCK (IMPORTANT)
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+flutter {
+    source = "../.."
 }

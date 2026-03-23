@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import '../models/task_model.dart';
+import '../../../services/notification_service.dart';
 
 class AddTaskScreen extends StatefulWidget {
   final Task? task;
@@ -18,17 +20,14 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   DateTime selectedDate = DateTime.now();
   TimeOfDay selectedTime = TimeOfDay.now();
 
+  // 🔔 Whether the user wants a reminder for this task
+  bool enableReminder = true;
+
   String selectedCategory = "Personal";
-  String selectedPriority = "Medium"; // ✅ NEW
+  String selectedPriority = "Medium";
 
-  final List<String> categories = [
-    "Work",
-    "Personal",
-    "Shopping",
-    "Others",
-  ];
-
-  final List<String> priorities = ["High", "Medium", "Low"]; // ✅ NEW
+  final List<String> categories = ["Work", "Personal", "Shopping", "Others"];
+  final List<String> priorities = ["High", "Medium", "Low"];
 
   @override
   void initState() {
@@ -39,7 +38,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       _controller.text = task.title;
       selectedCategory = task.category ?? "Personal";
       _descController.text = task.description ?? "";
-      selectedPriority = task.priority; // ✅ PREFILL
+      selectedPriority = task.priority;
 
       if (task.dueDate != null) {
         selectedDate = task.dueDate!;
@@ -62,12 +61,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime(2030),
     );
-
-    if (picked != null) {
-      setState(() {
-        selectedDate = picked;
-      });
-    }
+    if (picked != null) setState(() => selectedDate = picked);
   }
 
   void pickTime() async {
@@ -75,251 +69,313 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       context: context,
       initialTime: selectedTime,
     );
-
-    if (picked != null) {
-      setState(() {
-        selectedTime = picked;
-      });
-    }
+    if (picked != null) setState(() => selectedTime = picked);
   }
 
-  void saveTask() {
-    String title = _controller.text.trim();
+  /// Combines selectedDate + selectedTime into one DateTime
+  DateTime get combinedDateTime => DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        selectedTime.hour,
+        selectedTime.minute,
+      );
+
+  void saveTask() async {
+    final title = _controller.text.trim();
     if (title.isEmpty) return;
 
-    final combinedDateTime = DateTime(
-      selectedDate.year,
-      selectedDate.month,
-      selectedDate.day,
-      selectedTime.hour,
-      selectedTime.minute,
-    );
+    final notifService = NotificationService();
+    final box = Hive.box<Task>('tasks');
 
     if (widget.task != null) {
+      // ✏️ EDITING existing task
       final task = widget.task!;
+
+      // Cancel old notification before rescheduling
+      await notifService.cancelNotification(task.key as int);
+
       task.title = title;
       task.category = selectedCategory;
       task.dueDate = combinedDateTime;
       task.description = _descController.text.trim();
-      task.priority = selectedPriority; // ✅ NEW
-      task.save();
+      task.priority = selectedPriority;
+      await task.save();
 
-      Navigator.pop(context);
+      // 🔔 Reschedule notification using the same Hive key as ID
+      if (enableReminder) {
+        await notifService.scheduleNotification(
+          id: task.key as int,
+          title: '🔔 ${task.title}',
+          body: task.description?.isNotEmpty == true
+              ? task.description!
+              : 'Your task is due now!',
+          scheduledTime: combinedDateTime,
+        );
+      }
+
+      if (mounted) Navigator.pop(context);
     } else {
+      // ➕ ADDING new task
       final newTask = Task(
         title: title,
         category: selectedCategory,
         dueDate: combinedDateTime,
         isCompleted: false,
         description: _descController.text.trim(),
-        priority: selectedPriority, // ✅ NEW
+        priority: selectedPriority,
       );
 
-      Navigator.pop(context, newTask);
+      // ✅ Add to Hive first so we get a real unique key
+      final key = await box.add(newTask);
+
+      // 🔔 Now schedule notification using the real Hive key as ID
+      // This guarantees no two tasks ever share the same notification ID
+      if (enableReminder) {
+        await notifService.scheduleNotification(
+          id: key,
+          title: '🔔 $title',
+          body: _descController.text.trim().isNotEmpty
+              ? _descController.text.trim()
+              : 'Your task is due now!',
+          scheduledTime: combinedDateTime,
+        );
+      }
+
+      // ✅ Pop without returning newTask — already saved directly above
+      if (mounted) Navigator.pop(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.task != null;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Dynamic fill color — works in both light & dark
+    final fieldFill = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF2A2A2A)
+        : Colors.white;
+
+    InputDecoration fieldDecoration({String? hint, Widget? prefix}) {
+      return InputDecoration(
+        hintText: hint,
+        prefixIcon: prefix,
+        filled: true,
+        fillColor: fieldFill,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+      );
+    }
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-
       appBar: AppBar(
         title: Text(isEditing ? "Edit Task" : "Add Task"),
       ),
-
       body: SafeArea(
         child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Task Details",
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Task Details",
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
 
-                // ✏️ Title
-                TextField(
-                  controller: _controller,
-                  decoration: InputDecoration(
-                    hintText: "Enter task title...",
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    border: OutlineInputBorder(
+              // ✏️ Title
+              TextField(
+                controller: _controller,
+                decoration: fieldDecoration(hint: "Enter task title..."),
+              ),
+              const SizedBox(height: 12),
+
+              // 📝 Description
+              TextField(
+                controller: _descController,
+                maxLines: 3,
+                decoration:
+                    fieldDecoration(hint: "Add description (optional)..."),
+              ),
+              const SizedBox(height: 20),
+
+              // ─── DATE & TIME ROW ───
+              Row(
+                children: [
+                  // 📅 Date picker
+                  Expanded(
+                    child: _InfoTile(
+                      icon: Icons.calendar_today,
+                      label: DateFormat('dd MMM yyyy').format(selectedDate),
+                      onTap: pickDate,
+                      fillColor: fieldFill,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // ⏰ Time picker
+                  Expanded(
+                    child: _InfoTile(
+                      icon: Icons.access_time,
+                      label: selectedTime.format(context),
+                      onTap: pickTime,
+                      fillColor: fieldFill,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // 🔔 Reminder toggle
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: fieldFill,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.notifications_outlined,
+                            size: 18, color: colorScheme.primary),
+                        const SizedBox(width: 10),
+                        const Text("Remind me",
+                            style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                    Switch(
+                      value: enableReminder,
+                      activeColor: colorScheme.primary,
+                      onChanged: (val) =>
+                          setState(() => enableReminder = val),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 🏷 Category dropdown
+              DropdownButtonFormField<String>(
+                value: selectedCategory,
+                decoration: fieldDecoration(hint: "Category"),
+                items: categories
+                    .map((cat) =>
+                        DropdownMenuItem(value: cat, child: Text(cat)))
+                    .toList(),
+                onChanged: (val) =>
+                    setState(() => selectedCategory = val!),
+              ),
+              const SizedBox(height: 12),
+
+              // 🔥 Priority dropdown with color dot
+              DropdownButtonFormField<String>(
+                value: selectedPriority,
+                decoration: fieldDecoration(hint: "Priority"),
+                items: priorities.map((p) {
+                  return DropdownMenuItem(
+                    value: p,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: _priorityColor(p),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        Text(p),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) =>
+                    setState(() => selectedPriority = val!),
+              ),
+              const SizedBox(height: 30),
+
+              // 🚀 Save button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: saveTask,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // 📝 Description
-                TextField(
-                  controller: _descController,
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    hintText: "Add description...",
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
+                  child: Text(
+                    isEditing ? "Update Task" : "Save Task",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-
-                const SizedBox(height: 20),
-
-                // 📅 Date
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.calendar_today,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary),
-                          const SizedBox(width: 10),
-                          Text(DateFormat('dd MMM yyyy').format(selectedDate)),
-                        ],
-                      ),
-                      TextButton(
-                        onPressed: pickDate,
-                        child: const Text("Change"),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // ⏰ Time
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.access_time,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary),
-                          const SizedBox(width: 10),
-                          Text(selectedTime.format(context)),
-                        ],
-                      ),
-                      TextButton(
-                        onPressed: pickTime,
-                        child: const Text("Change"),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 🏷 Category
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-                  items: categories.map((cat) {
-                    return DropdownMenuItem(
-                      value: cat,
-                      child: Text(cat),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      selectedCategory = val!;
-                    });
-                  },
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 🔥 PRIORITY (NEW)
-                DropdownButtonFormField<String>(
-                  value: selectedPriority,
-                  items: priorities.map((p) {
-                    return DropdownMenuItem(
-                      value: p,
-                      child: Text(p),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      selectedPriority = val!;
-                    });
-                  },
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
-                // 🚀 Save Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: saveTask,
-                    style: ElevatedButton.styleFrom(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: Text(
-                      isEditing ? "Update Task" : "Save Task",
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-              ],
-            ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Color _priorityColor(String priority) {
+    switch (priority) {
+      case "High":
+        return Colors.red;
+      case "Low":
+        return Colors.green;
+      default:
+        return Colors.orange;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// Reusable compact tile for date & time pickers
+// ─────────────────────────────────────────────
+class _InfoTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color fillColor;
+
+  const _InfoTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.fillColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: fillColor,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(icon,
+                size: 16, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(label, style: const TextStyle(fontSize: 13)),
+            ),
+          ],
         ),
       ),
     );

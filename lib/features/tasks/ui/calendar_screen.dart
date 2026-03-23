@@ -17,17 +17,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final box = Hive.box<Task>('tasks');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-
-      appBar: AppBar(
-        title: const Text("Calendar"),
-      ),
-
+      // ℹ️ No AppBar here — handled by MainScreen
       body: Column(
         children: [
-          // 📅 Calendar Card (Modern Container)
+          // 📅 Calendar card
           Card(
             margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: Padding(
@@ -36,16 +34,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 firstDay: DateTime(2020),
                 lastDay: DateTime(2030),
                 focusedDay: selectedDay,
-
                 selectedDayPredicate: (day) =>
                     isSameDay(day, selectedDay),
-
                 onDaySelected: (selected, focused) {
-                  setState(() {
-                    selectedDay = selected;
-                  });
+                  setState(() => selectedDay = selected);
                 },
-
                 eventLoader: (day) {
                   return box.values.where((task) {
                     final due = task.dueDate;
@@ -55,32 +48,61 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         due.day == day.day;
                   }).toList();
                 },
-
-                // 🎨 MODERN STYLING
                 calendarStyle: CalendarStyle(
+                  // Today circle
                   todayDecoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withOpacity(0.25),
+                    color: primary.withOpacity(0.25),
                     shape: BoxShape.circle,
                   ),
+                  // Selected day circle
                   selectedDecoration: BoxDecoration(
-                    color:
-                        Theme.of(context).colorScheme.primary,
+                    color: primary,
                     shape: BoxShape.circle,
                   ),
+                  // Task dot marker
                   markerDecoration: BoxDecoration(
-                    color:
-                        Theme.of(context).colorScheme.primary,
+                    color: primary,
                     shape: BoxShape.circle,
                   ),
                   outsideDaysVisible: false,
+                  // Dark mode text adjustments
+                  defaultTextStyle: TextStyle(
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                  weekendTextStyle: TextStyle(
+                    color: isDark ? Colors.white54 : Colors.black54,
+                  ),
+                  todayTextStyle: TextStyle(
+                    color: isDark ? Colors.white : primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  selectedTextStyle: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-
-                headerStyle: const HeaderStyle(
+                headerStyle: HeaderStyle(
                   formatButtonVisible: false,
                   titleCentered: true,
+                  titleTextStyle: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                  leftChevronIcon: Icon(Icons.chevron_left,
+                      color: isDark ? Colors.white70 : Colors.black54),
+                  rightChevronIcon: Icon(Icons.chevron_right,
+                      color: isDark ? Colors.white70 : Colors.black54),
+                ),
+                daysOfWeekStyle: DaysOfWeekStyle(
+                  weekdayStyle: TextStyle(
+                    color: isDark ? Colors.white54 : Colors.black54,
+                    fontSize: 12,
+                  ),
+                  weekendStyle: TextStyle(
+                    color: isDark ? Colors.white38 : Colors.black38,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ),
@@ -88,7 +110,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
           const SizedBox(height: 8),
 
-          // 🧾 Selected Date Title
+          // 🗓 Selected date label
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Align(
@@ -102,7 +124,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
           const SizedBox(height: 8),
 
-          // 📋 Task List
+          // 📋 Tasks for selected day
           Expanded(
             child: ValueListenableBuilder(
               valueListenable: box.listenable(),
@@ -119,30 +141,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   return Center(
                     child: Text(
                       "No tasks for this day ✨",
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium,
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   );
                 }
 
                 return ListView.builder(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   itemCount: tasksForDay.length,
                   itemBuilder: (context, index) {
                     final task = tasksForDay[index];
-                    final date =
-                        task.dueDate ?? DateTime.now();
+                    final date = task.dueDate ?? DateTime.now();
 
                     return Card(
-                      margin:
-                          const EdgeInsets.symmetric(vertical: 6),
+                      margin: const EdgeInsets.symmetric(vertical: 6),
                       child: ListTile(
-                        contentPadding:
-                            const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
-
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
                         title: Text(
                           task.title,
                           style: TextStyle(
@@ -152,23 +167,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                 : null,
                           ),
                         ),
-
                         subtitle: Padding(
-                          padding:
-                              const EdgeInsets.only(top: 6),
+                          padding: const EdgeInsets.only(top: 6),
                           child: Row(
                             children: [
-                              // 🏷 Category
+                              // 🏷 Category badge
                               Container(
-                                padding:
-                                    const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .primary
-                                      .withOpacity(0.1),
+                                  color: primary.withOpacity(0.1),
                                   borderRadius:
                                       BorderRadius.circular(20),
                                 ),
@@ -176,22 +184,22 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                   task.category ?? "General",
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary,
+                                    color: primary,
                                   ),
                                 ),
                               ),
-
                               const SizedBox(width: 10),
-
-                              // 📅 Date
+                              // ⏰ Time
+                              Icon(Icons.access_time_rounded,
+                                  size: 12,
+                                  color: Colors.grey.shade500),
+                              const SizedBox(width: 4),
                               Text(
-                                DateFormat('dd MMM')
-                                    .format(date),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall,
+                                DateFormat('hh:mm a').format(date),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade500,
+                                ),
                               ),
                             ],
                           ),
