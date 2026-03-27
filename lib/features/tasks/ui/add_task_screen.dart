@@ -20,7 +20,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   DateTime selectedDate = DateTime.now();
   TimeOfDay selectedTime = TimeOfDay.now();
 
-  // 🔔 Whether the user wants a reminder for this task
   bool enableReminder = true;
 
   String selectedCategory = "Personal";
@@ -72,7 +71,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     if (picked != null) setState(() => selectedTime = picked);
   }
 
-  /// Combines selectedDate + selectedTime into one DateTime
   DateTime get combinedDateTime => DateTime(
         selectedDate.year,
         selectedDate.month,
@@ -89,10 +87,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     final box = Hive.box<Task>('tasks');
 
     if (widget.task != null) {
-      // ✏️ EDITING existing task
       final task = widget.task!;
 
-      // Cancel old notification before rescheduling
       await notifService.cancelNotification(task.key as int);
 
       task.title = title;
@@ -102,11 +98,10 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       task.priority = selectedPriority;
       await task.save();
 
-      // 🔔 Reschedule notification using the same Hive key as ID
       if (enableReminder) {
         await notifService.scheduleNotification(
           id: task.key as int,
-          title: '🔔 ${task.title}',
+          title: task.title,
           body: task.description?.isNotEmpty == true
               ? task.description!
               : 'Your task is due now!',
@@ -116,7 +111,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
       if (mounted) Navigator.pop(context);
     } else {
-      // ➕ ADDING new task
       final newTask = Task(
         title: title,
         category: selectedCategory,
@@ -126,15 +120,12 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         priority: selectedPriority,
       );
 
-      // ✅ Add to Hive first so we get a real unique key
       final key = await box.add(newTask);
 
-      // 🔔 Now schedule notification using the real Hive key as ID
-      // This guarantees no two tasks ever share the same notification ID
       if (enableReminder) {
         await notifService.scheduleNotification(
           id: key,
-          title: '🔔 $title',
+          title: title,
           body: _descController.text.trim().isNotEmpty
               ? _descController.text.trim()
               : 'Your task is due now!',
@@ -142,7 +133,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         );
       }
 
-      // ✅ Pop without returning newTask — already saved directly above
       if (mounted) Navigator.pop(context);
     }
   }
@@ -152,7 +142,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     final isEditing = widget.task != null;
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Dynamic fill color — works in both light & dark
     final fieldFill = Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFF2A2A2A)
         : Colors.white;
@@ -188,36 +177,33 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
 
-              // ✏️ Title
               TextField(
                 controller: _controller,
-                decoration: fieldDecoration(hint: "Enter task title..."),
+                decoration:
+                    fieldDecoration(hint: "Enter task title..."),
               ),
               const SizedBox(height: 12),
 
-              // 📝 Description
               TextField(
                 controller: _descController,
                 maxLines: 3,
-                decoration:
-                    fieldDecoration(hint: "Add description (optional)..."),
+                decoration: fieldDecoration(
+                    hint: "Add description (optional)..."),
               ),
               const SizedBox(height: 20),
 
-              // ─── DATE & TIME ROW ───
               Row(
                 children: [
-                  // 📅 Date picker
                   Expanded(
                     child: _InfoTile(
                       icon: Icons.calendar_today,
-                      label: DateFormat('dd MMM yyyy').format(selectedDate),
+                      label:
+                          DateFormat('dd MMM yyyy').format(selectedDate),
                       onTap: pickDate,
                       fillColor: fieldFill,
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // ⏰ Time picker
                   Expanded(
                     child: _InfoTile(
                       icon: Icons.access_time,
@@ -230,7 +216,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               ),
               const SizedBox(height: 12),
 
-              // 🔔 Reminder toggle
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -241,12 +226,11 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                    const Row(
                       children: [
-                        Icon(Icons.notifications_outlined,
-                            size: 18, color: colorScheme.primary),
-                        const SizedBox(width: 10),
-                        const Text("Remind me",
+                        Icon(Icons.notifications_outlined, size: 18),
+                        SizedBox(width: 10),
+                        Text("Remind me",
                             style: TextStyle(fontSize: 14)),
                       ],
                     ),
@@ -261,40 +245,41 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               ),
               const SizedBox(height: 20),
 
-              // 🏷 Category dropdown
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 6),
+                child: Text("Category",
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              ),
+
               DropdownButtonFormField<String>(
                 value: selectedCategory,
                 decoration: fieldDecoration(hint: "Category"),
-                items: categories
-                    .map((cat) =>
-                        DropdownMenuItem(value: cat, child: Text(cat)))
-                    .toList(),
+                items: categories.map((cat) {
+                  return DropdownMenuItem(
+                    value: cat,
+                    child: Text(cat),
+                  );
+                }).toList(),
                 onChanged: (val) =>
                     setState(() => selectedCategory = val!),
               ),
               const SizedBox(height: 12),
 
-              // 🔥 Priority dropdown with color dot
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 6),
+                child: Text("Priority",
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              ),
+
               DropdownButtonFormField<String>(
                 value: selectedPriority,
                 decoration: fieldDecoration(hint: "Priority"),
                 items: priorities.map((p) {
                   return DropdownMenuItem(
                     value: p,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: _priorityColor(p),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Text(p),
-                      ],
-                    ),
+                    child: Text(p),
                   );
                 }).toList(),
                 onChanged: (val) =>
@@ -302,7 +287,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               ),
               const SizedBox(height: 30),
 
-              // 🚀 Save button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -310,14 +294,16 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
                   child: Text(
                     isEditing ? "Update Task" : "Save Task",
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style:
+                        const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -328,22 +314,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       ),
     );
   }
-
-  Color _priorityColor(String priority) {
-    switch (priority) {
-      case "High":
-        return Colors.red;
-      case "Low":
-        return Colors.green;
-      default:
-        return Colors.orange;
-    }
-  }
 }
 
-// ─────────────────────────────────────────────
-// Reusable compact tile for date & time pickers
-// ─────────────────────────────────────────────
 class _InfoTile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -362,15 +334,15 @@ class _InfoTile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
           color: fillColor,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           children: [
-            Icon(icon,
-                size: 16, color: Theme.of(context).colorScheme.primary),
+            Icon(icon, size: 16),
             const SizedBox(width: 8),
             Expanded(
               child: Text(label, style: const TextStyle(fontSize: 13)),
