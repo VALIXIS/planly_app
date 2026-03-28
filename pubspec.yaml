@@ -21,9 +21,12 @@ dependencies:
   intl: ^0.18.1
   table_calendar: ^3.0.9
 
-  # ✅ Notifications
+  # Notifications
   flutter_local_notifications: ^17.2.2
   timezone: ^0.9.4
+
+  # 🎉 Confetti animation
+  confetti: ^0.8.0
 
 dev_dependencies:
   flutter_test:

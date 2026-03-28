@@ -1,7 +1,7 @@
-// ONLY color improvements — NOTHING removed
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ✅ already present
+import 'package:confetti/confetti.dart';
+import 'focus_mode_screen.dart';
+import 'package:flutter/services.dart';
 import '../../../main.dart' show rootScaffoldMessengerKey;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
@@ -21,41 +21,101 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   FilterType selectedFilter = FilterType.all;
   String searchQuery = "";
-  String? selectedCategory;
+
+  // 🎉 Confetti controller
+  late ConfettiController _confettiController;
+
+  // 🔥 Streak — stored in Hive settings box
+  int _streak = 0;
+  DateTime? _lastCompletedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _confettiController =
+        ConfettiController(duration: const Duration(seconds: 3));
+    _loadStreak();
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
+  }
+
+  // Load streak from Hive
+  void _loadStreak() {
+    final settings = Hive.box('settings');
+    _streak = settings.get('streak', defaultValue: 0) as int;
+    final lastDateStr =
+        settings.get('lastCompletedDate', defaultValue: '') as String;
+    if (lastDateStr.isNotEmpty) {
+      _lastCompletedDate = DateTime.tryParse(lastDateStr);
+    }
+  }
+
+  // Update streak when all today's tasks are done
+  void _checkAndUpdateStreak(List<Task> todayTasks) {
+    if (todayTasks.isEmpty) return;
+    final allDone = todayTasks.every((t) => t.isCompleted);
+    if (!allDone) return;
+
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    // Already counted today
+    if (_lastCompletedDate != null &&
+        isSameDay(_lastCompletedDate!, todayDate)) return;
+
+    final yesterday =
+        todayDate.subtract(const Duration(days: 1));
+
+    // If completed yesterday → continue streak, else reset
+    if (_lastCompletedDate != null &&
+        isSameDay(_lastCompletedDate!, yesterday)) {
+      _streak++;
+    } else {
+      _streak = 1;
+    }
+
+    _lastCompletedDate = todayDate;
+
+    final settings = Hive.box('settings');
+    settings.put('streak', _streak);
+    settings.put('lastCompletedDate', todayDate.toIso8601String());
+
+    // 🎉 Fire confetti!
+    _confettiController.play();
+  }
 
   final List<String> categories = [
     "Work",
     "Personal",
     "Shopping",
-    "Others"
+    "Others",
   ];
 
-  /// 🔥 UPDATED (SOFT COLORS — NO GREEN)
   Color getPriorityColor(String priority) {
     switch (priority) {
       case "High":
-        return const Color(0xFFE57373); // soft red
+        return const Color(0xFFE57373);
       case "Low":
-        return const Color(0xFF64B5F6); // soft blue (replaced green)
+        return const Color(0xFF64B5F6);
       default:
-        return const Color(0xFFFFB74D); // soft amber
-    }
-  }
-
-  /// 🎨 NEW (SOFT BACKGROUND TINT)
-  Color getPriorityBg(String priority) {
-    switch (priority) {
-      case "High":
-        return const Color(0xFFFFEBEE);
-      case "Low":
-        return const Color(0xFFE3F2FD);
-      default:
-        return const Color(0xFFFFF3E0);
+        return const Color(0xFFFFB74D);
     }
   }
 
   bool isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+
+  // ── Smart greeting based on time of day ────────
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,17 +123,35 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final searchFill = isDark ? const Color(0xFF2A2A2A) : Colors.white;
     final primary = Theme.of(context).colorScheme.primary;
-    final now = DateTime.now();
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: ValueListenableBuilder(
         valueListenable: box.listenable(),
         builder: (context, Box<Task> box, _) {
           final allTasks = box.values.toList();
+          final now = DateTime.now();
 
+          // ── Task counts for chips & summary ────────────
+          final todayCount = allTasks.where((t) {
+            final due = t.dueDate;
+            if (due == null) return false;
+            return isSameDay(due, now);
+          }).length;
+
+          final upcomingCount = allTasks.where((t) {
+            final due = t.dueDate;
+            if (due == null) return false;
+            return due.isAfter(now);
+          }).length;
+
+          final pendingCount =
+              allTasks.where((t) => !t.isCompleted).length;
+
+          final completedCount =
+              allTasks.where((t) => t.isCompleted).length;
+
+          // ── Filter by type ──────────────────────────────
           List<Task> tasks = [];
-
           if (selectedFilter == FilterType.all) {
             tasks = allTasks;
           } else if (selectedFilter == FilterType.today) {
@@ -94,12 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
             tasks = allTasks.where((t) => t.isCompleted).toList();
           }
 
-          if (selectedCategory != null) {
-            tasks = tasks
-                .where((task) => task.category == selectedCategory)
-                .toList();
-          }
-
+          // ── Search filter ───────────────────────────────
           if (searchQuery.isNotEmpty) {
             tasks = tasks
                 .where((task) => task.title
@@ -108,50 +181,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 .toList();
           }
 
-          /// 🔥 GROUPING (UNCHANGED)
-          Map<String, List<Task>> groupedTasks = {};
-
-          if (selectedFilter == FilterType.all) {
-            final tomorrow = now.add(const Duration(days: 1));
-            final nextWeek = now.add(const Duration(days: 7));
-
-            groupedTasks = {
-              "Today": [],
-              "Tomorrow": [],
-              "This Week": [],
-              "Later": [],
-            };
-
-            for (var task in tasks) {
-              final due = task.dueDate;
-              if (due == null) continue;
-
-              if (isSameDay(due, now)) {
-                groupedTasks["Today"]!.add(task);
-              } else if (isSameDay(due, tomorrow)) {
-                groupedTasks["Tomorrow"]!.add(task);
-              } else if (due.isAfter(tomorrow) && due.isBefore(nextWeek)) {
-                groupedTasks["This Week"]!.add(task);
-              } else if (due.isAfter(nextWeek)) {
-                groupedTasks["Later"]!.add(task);
-              }
-            }
-
-            const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
-
-            for (var group in groupedTasks.values) {
-              group.sort((a, b) {
-                if (a.isCompleted != b.isCompleted) {
-                  return a.isCompleted ? 1 : -1;
-                }
-                return (priorityOrder[a.priority] ?? 1)
-                    .compareTo(priorityOrder[b.priority] ?? 1);
-              });
-            }
-          } else {
-            const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
-
-            tasks.sort((a, b) {
+          // ── Priority sort helper ────────────────────────
+          const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
+          void sortGroup(List<Task> group) {
+            group.sort((a, b) {
               if (a.isCompleted != b.isCompleted) {
                 return a.isCompleted ? 1 : -1;
               }
@@ -160,13 +193,207 @@ class _HomeScreenState extends State<HomeScreen> {
             });
           }
 
+          // ── Group tasks by category ─────────────────────
+          // Always group by category regardless of filter
+          final Map<String, List<Task>> groupedByCategory = {};
+
+          for (final cat in categories) {
+            final catTasks =
+                tasks.where((t) => t.category == cat).toList();
+            if (catTasks.isNotEmpty) {
+              sortGroup(catTasks);
+              groupedByCategory[cat] = catTasks;
+            }
+          }
+
+          // Tasks with no category or unknown category → "Others"
+          final uncategorized = tasks
+              .where((t) =>
+                  t.category == null ||
+                  !categories.contains(t.category))
+              .toList();
+          if (uncategorized.isNotEmpty) {
+            sortGroup(uncategorized);
+            groupedByCategory["Others"] =
+                (groupedByCategory["Others"] ?? []) + uncategorized;
+          }
+
+          final bool isEmpty = groupedByCategory.isEmpty;
+
+          // 🔥 Check streak + confetti after every build
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final todayTasks = allTasks.where((task) {
+              final due = task.dueDate;
+              if (due == null) return false;
+              return due.year == now.year &&
+                  due.month == now.month &&
+                  due.day == now.day;
+            }).toList();
+            _checkAndUpdateStreak(todayTasks);
+          });
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
-              /// 🔍 Search (UNCHANGED)
+              // 🎉 Confetti widget — anchored to top center
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: _confettiController,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  numberOfParticles: 30,
+                  gravity: 0.3,
+                  colors: [
+                    primary,
+                    Colors.pink,
+                    Colors.orange,
+                    Colors.green,
+                    Colors.blue,
+                  ],
+                ),
+              ),
+
+              // 👋 Greeting row + streak + focus mode button
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Greeting + summary
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _getGreeting(),
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? Colors.white
+                                  : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            pendingCount == 0
+                                ? "All caught up! Great job."
+                                : "$pendingCount pending · $completedCount completed",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isDark
+                                  ? Colors.white54
+                                  : Colors.black45,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    // 🔥 Streak badge
+                    GestureDetector(
+                      onTap: () {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(SnackBar(
+                          content: Text(
+                            _streak == 0
+                                ? "Complete all tasks today to start a streak!"
+                                : "$_streak day streak! Keep it up!",
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ));
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: _streak > 0
+                              ? Colors.orange.withOpacity(0.15)
+                              : (isDark
+                                  ? const Color(0xFF2A2A2A)
+                                  : Colors.grey.shade100),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _streak > 0
+                                ? Colors.orange.withOpacity(0.4)
+                                : Colors.transparent,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.local_fire_department_rounded,
+                              size: 16,
+                              color: _streak > 0
+                                  ? Colors.orange
+                                  : Colors.grey.shade400,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "$_streak",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: _streak > 0
+                                    ? Colors.orange
+                                    : Colors.grey.shade400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    // 🎯 Focus mode button
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const FocusModeScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: primary.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.center_focus_strong_rounded,
+                                size: 16, color: primary),
+                            const SizedBox(width: 4),
+                            Text(
+                              "Focus",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // 🔍 Search bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: TextField(
                   onChanged: (value) =>
                       setState(() => searchQuery = value),
@@ -175,6 +402,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     prefixIcon: const Icon(Icons.search, size: 18),
                     filled: true,
                     fillColor: searchFill,
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 10),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -183,94 +413,89 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              /// 🏷️ Categories (UNCHANGED)
+              // 🔥 Filter chips — horizontal scroll with counts
               Padding(
                 padding: const EdgeInsets.only(left: 12, bottom: 10),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _categoryChip(
-                        label: "All",
-                        isSelected: selectedCategory == null,
-                        onTap: () =>
-                            setState(() => selectedCategory = null),
-                        isDark: isDark,
-                        primary: primary,
-                      ),
-                      const SizedBox(width: 8),
-                      ...categories.map((cat) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: _categoryChip(
-                            label: cat,
-                            isSelected: selectedCategory == cat,
-                            onTap: () =>
-                                setState(() => selectedCategory = cat),
-                            isDark: isDark,
-                            primary: primary,
-                          ),
-                        );
-                      }),
+                      _filterChip("All", FilterType.all, primary, isDark,
+                          count: allTasks.length),
+                      const SizedBox(width: 6),
+                      _filterChip("Today", FilterType.today, primary, isDark,
+                          count: todayCount),
+                      const SizedBox(width: 6),
+                      _filterChip("Upcoming", FilterType.upcoming, primary, isDark,
+                          count: upcomingCount),
+                      const SizedBox(width: 6),
+                      _filterChip("Pending", FilterType.pending, primary, isDark,
+                          count: pendingCount),
+                      const SizedBox(width: 6),
+                      _filterChip("Done", FilterType.completed, primary, isDark,
+                          count: completedCount),
                     ],
                   ),
                 ),
               ),
 
-              /// 🔥 Filters (UNCHANGED)
-              Padding(
-                padding: const EdgeInsets.only(left: 12, bottom: 8),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      filterChip("All", FilterType.all),
-                      const SizedBox(width: 6),
-                      filterChip("Today", FilterType.today),
-                      const SizedBox(width: 6),
-                      filterChip("Upcoming", FilterType.upcoming),
-                      const SizedBox(width: 6),
-                      filterChip("Pending", FilterType.pending),
-                      const SizedBox(width: 6),
-                      filterChip("Done", FilterType.completed),
-                    ],
-                  ),
-                ),
-              ),
-
-              /// 📋 LIST (UNCHANGED)
+              // 📋 Category-grouped task list
               Expanded(
-                child: tasks.isEmpty
+                child: isEmpty
                     ? _emptyState(context)
-                    : selectedFilter == FilterType.all
-                        ? ListView(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            children: groupedTasks.entries
-                                .where((e) => e.value.isNotEmpty)
-                                .map((entry) {
-                              return Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                    : ListView(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        children: groupedByCategory.entries.map((entry) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 14),
+
+                              // Category header
+                              Row(
                                 children: [
-                                  const SizedBox(height: 12),
-                                  Text(entry.key,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 6),
-                                  ...entry.value.map((task) =>
-                                      _buildTaskItem(task, primary)),
+                                  Text(
+                                    entry.key,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : Colors.black54,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Task count badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: primary.withOpacity(0.12),
+                                      borderRadius:
+                                          BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      "${entry.value.length}",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: primary,
+                                      ),
+                                    ),
+                                  ),
                                 ],
-                              );
-                            }).toList(),
-                          )
-                        : ListView.builder(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            itemCount: tasks.length,
-                            itemBuilder: (_, i) =>
-                                _buildTaskItem(tasks[i], primary),
-                          ),
+                              ),
+
+                              const SizedBox(height: 6),
+
+                              // Tasks in this category
+                              ...entry.value.map(
+                                  (task) => _buildTaskItem(task, primary)),
+                            ],
+                          );
+                        }).toList(),
+                      ),
               ),
             ],
           );
@@ -289,11 +514,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// 🔥 ONLY COLOR CHANGED HERE
+  // ─────────────────────────────────────────────
+  // Task card — colored left border, no tint
+  // ─────────────────────────────────────────────
   Widget _buildTaskItem(Task task, Color primary) {
-    final date = task.dueDate ?? DateTime.now();
-    final isOverdue =
-        !task.isCompleted && date.isBefore(DateTime.now());
+    final date = task.dueDate;
+    final isOverdue = date != null &&
+        !task.isCompleted &&
+        date.isBefore(DateTime.now());
 
     return Dismissible(
       key: Key(task.key.toString()),
@@ -319,6 +547,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ..showSnackBar(
             SnackBar(
               content: const Text("Task deleted"),
+              duration: const Duration(seconds: 3),
               action: SnackBarAction(
                 label: "UNDO",
                 onPressed: () async {
@@ -328,6 +557,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
       },
+
       background: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
         decoration: BoxDecoration(
@@ -338,24 +568,26 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.only(right: 20),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
+
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 250),
-        opacity: task.isCompleted ? 0.6 : 1,
+        opacity: task.isCompleted ? 0.55 : 1.0,
         child: Card(
-          color: getPriorityBg(task.priority), // ✅ UPDATED
           margin: const EdgeInsets.symmetric(vertical: 4),
           clipBehavior: Clip.antiAlias,
           child: IntrinsicHeight(
             child: Row(
               children: [
+                // ✅ Colored left border only
                 Container(
                   width: 4,
-                  color: getPriorityColor(task.priority), // ✅ UPDATED
+                  color: getPriorityColor(task.priority),
                 ),
+
                 Expanded(
                   child: ListTile(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
                     onTap: () async {
                       await Navigator.push(
                         context,
@@ -365,6 +597,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     },
 
+                    // Checkbox with haptic + scale animation
                     leading: GestureDetector(
                       onTap: () {
                         HapticFeedback.lightImpact();
@@ -372,7 +605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         task.save();
                       },
                       child: AnimatedScale(
-                        scale: task.isCompleted ? 1.1 : 1,
+                        scale: task.isCompleted ? 1.1 : 1.0,
                         duration: const Duration(milliseconds: 150),
                         child: Container(
                           width: 22,
@@ -412,26 +645,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Icon(Icons.access_time_rounded,
+                          if (date != null)
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.access_time_rounded,
                                   size: 11,
-                                  color: isOverdue
-                                      ? Colors.red.shade400
-                                      : Colors.grey.shade500),
-                              const SizedBox(width: 3),
-                              Text(
-                                DateFormat('dd MMM · hh:mm a')
-                                    .format(date),
-                                style: TextStyle(
-                                  fontSize: 11,
                                   color: isOverdue
                                       ? Colors.red.shade400
                                       : Colors.grey.shade500,
                                 ),
-                              ),
-                            ],
-                          ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  DateFormat('dd MMM · hh:mm a')
+                                      .format(date),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isOverdue
+                                        ? Colors.red.shade400
+                                        : Colors.grey.shade500,
+                                  ),
+                                ),
+                              ],
+                            ),
                           if (task.description != null &&
                               task.description!.isNotEmpty)
                             Padding(
@@ -459,6 +695,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // Empty state
+  // ─────────────────────────────────────────────
   Widget _emptyState(BuildContext context) {
     return Center(
       child: Column(
@@ -469,13 +708,75 @@ class _HomeScreenState extends State<HomeScreen> {
           Text("No tasks yet",
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
-          Text("Tap + to add your first task",
-              style: TextStyle(color: Colors.grey.shade500)),
+          Text(
+            "Tap + to add your first task",
+            style: TextStyle(color: Colors.grey.shade500),
+          ),
         ],
       ),
     );
   }
 
-  Widget filterChip(String label, FilterType type) { return Container(); }
-  Widget _categoryChip({required String label, required bool isSelected, required VoidCallback onTap, required bool isDark, required Color primary}) { return Container(); }
+  // ─────────────────────────────────────────────
+  // Filter chip with count badge
+  // ─────────────────────────────────────────────
+  Widget _filterChip(
+      String label, FilterType type, Color primary, bool isDark,
+      {int count = 0}) {
+    final isSelected = selectedFilter == type;
+    return GestureDetector(
+      onTap: () => setState(() => selectedFilter = type),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? primary
+              : isDark
+                  ? const Color(0xFF2A2A2A)
+                  : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight:
+                    isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected
+                    ? Colors.white
+                    : isDark
+                        ? Colors.white70
+                        : Colors.black87,
+              ),
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withOpacity(0.25)
+                      : primary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  "$count",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? Colors.white : primary,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
