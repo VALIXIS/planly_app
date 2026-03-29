@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'features/tasks/ui/splash_screen.dart';
+import 'features/tasks/ui/splash_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'features/tasks/ui/home_screen.dart';
 import 'features/tasks/ui/calendar_screen.dart';
@@ -196,7 +198,8 @@ class MyApp extends StatelessWidget {
                 ),
               ),
 
-              home: const MainScreen(),
+              // ✅ Splash screen shows quote for 3s then fades to MainScreen
+              home: const SplashScreen(nextScreen: MainScreen()),
             );
           },
         );
