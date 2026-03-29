@@ -50,8 +50,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Returns a different quote each day
   String get _todayQuote {
-    final dayIndex = DateTime.now().difference(
-            DateTime(DateTime.now().year, 1, 1)).inDays %
+    final dayIndex = DateTime.now()
+            .difference(DateTime(DateTime.now().year, 1, 1))
+            .inDays %
         _quotes.length;
     return _quotes[dayIndex];
   }
@@ -108,14 +109,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   final List<String> categories = [
-    "Work", "Personal", "Shopping", "Others",
+    "Work",
+    "Personal",
+    "Shopping",
+    "Others",
   ];
 
   Color getPriorityColor(String priority) {
     switch (priority) {
-      case "High":  return const Color(0xFFE57373);
-      case "Low":   return const Color(0xFF64B5F6);
-      default:      return const Color(0xFFFFB74D);
+      case "High":
+        return const Color(0xFFE57373);
+      case "Low":
+        return const Color(0xFF64B5F6);
+      default:
+        return const Color(0xFFFFB74D);
     }
   }
 
@@ -129,24 +136,21 @@ class _HomeScreenState extends State<HomeScreen> {
     return "Good evening";
   }
 
-  // ── Smart Day Flow grouping ─────────────────────────
-  // Groups tasks into time-aware sections:
-  // Overdue → Now (within 3hrs) → Later Today → Tomorrow → This Week → Later → Anytime
+  // ── Smart Day Flow grouping ──────────────────────────
   Map<String, List<Task>> _buildSmartGroups(
       List<Task> tasks, DateTime now) {
     final groups = <String, List<Task>>{
       "Overdue": [],
-      "Now":     [],    // due within next 3 hours
+      "Now": [],
       "Later Today": [],
       "Tomorrow": [],
       "This Week": [],
       "Later": [],
-      "Anytime": [],    // no due date
+      "Anytime": [],
     };
 
     final tomorrow = DateTime(now.year, now.month, now.day + 1);
-    final dayAfterTomorrow =
-        DateTime(now.year, now.month, now.day + 2);
+    final dayAfterTomorrow = DateTime(now.year, now.month, now.day + 2);
     final nextWeek = now.add(const Duration(days: 7));
     final threeHoursLater = now.add(const Duration(hours: 3));
 
@@ -159,21 +163,17 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (due.isBefore(now) && !task.isCompleted) {
-        // Past due and not completed → Overdue
         groups["Overdue"]!.add(task);
       } else if (!due.isBefore(now) &&
           due.isBefore(threeHoursLater) &&
           isSameDay(due, now)) {
-        // Due within next 3 hours today → Now
         groups["Now"]!.add(task);
       } else if (isSameDay(due, now)) {
-        // Due today but not urgent → Later Today
         groups["Later Today"]!.add(task);
       } else if (due.isAfter(tomorrow.subtract(const Duration(seconds: 1))) &&
           due.isBefore(dayAfterTomorrow)) {
         groups["Tomorrow"]!.add(task);
-      } else if (due.isAfter(dayAfterTomorrow) &&
-          due.isBefore(nextWeek)) {
+      } else if (due.isAfter(dayAfterTomorrow) && due.isBefore(nextWeek)) {
         groups["This Week"]!.add(task);
       } else if (due.isAfter(nextWeek)) {
         groups["Later"]!.add(task);
@@ -186,10 +186,14 @@ class _HomeScreenState extends State<HomeScreen> {
   // Header color for each smart group
   Color _groupHeaderColor(String groupName, Color primary) {
     switch (groupName) {
-      case "Overdue":     return Colors.red.shade400;
-      case "Now":         return Colors.orange.shade600;
-      case "Later Today": return primary;
-      default:            return primary;
+      case "Overdue":
+        return Colors.red.shade400;
+      case "Now":
+        return Colors.orange.shade600;
+      case "Later Today":
+        return primary;
+      default:
+        return primary;
     }
   }
 
@@ -197,7 +201,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final box = Hive.box<Task>('tasks');
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final searchFill = isDark ? const Color(0xFF2A2A2A) : Colors.white;
     final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -208,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final allTasks = box.values.toList();
           final now = DateTime.now();
 
-          // ── Counts for chips ────────────────────────
+          // ── Counts for chips ──────────────────────────
           final todayCount = allTasks.where((t) {
             final due = t.dueDate;
             if (due == null) return false;
@@ -221,12 +224,10 @@ class _HomeScreenState extends State<HomeScreen> {
             return due.isAfter(now);
           }).length;
 
-          final pendingCount =
-              allTasks.where((t) => !t.isCompleted).length;
-          final completedCount =
-              allTasks.where((t) => t.isCompleted).length;
+          final pendingCount = allTasks.where((t) => !t.isCompleted).length;
+          final completedCount = allTasks.where((t) => t.isCompleted).length;
 
-          // ── Filter by type ──────────────────────────
+          // ── Filter by type ────────────────────────────
           List<Task> tasks = [];
           if (selectedFilter == FilterType.all) {
             tasks = allTasks;
@@ -248,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
             tasks = allTasks.where((t) => t.isCompleted).toList();
           }
 
-          // ── Search ──────────────────────────────────
+          // ── Search ────────────────────────────────────
           if (searchQuery.isNotEmpty) {
             tasks = tasks
                 .where((task) => task.title
@@ -257,7 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 .toList();
           }
 
-          // ── Priority sort helper ────────────────────
+          // ── Priority sort helper ──────────────────────
           const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
           void sortGroup(List<Task> group) {
             group.sort((a, b) {
@@ -269,9 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
             });
           }
 
-          // ── Build display groups ────────────────────
-          // "All" and "Today" → Smart Day Flow
-          // Other filters → Category grouping (existing behavior)
+          // ── Build display groups ──────────────────────
           Map<String, List<Task>> displayGroups = {};
           bool useSmartFlow = selectedFilter == FilterType.all ||
               selectedFilter == FilterType.today;
@@ -282,7 +281,6 @@ class _HomeScreenState extends State<HomeScreen> {
               sortGroup(g);
             }
           } else {
-            // Category grouping for other filters
             for (final cat in categories) {
               final catTasks =
                   tasks.where((t) => t.category == cat).toList();
@@ -293,8 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             final uncategorized = tasks
                 .where((t) =>
-                    t.category == null ||
-                    !categories.contains(t.category))
+                    t.category == null || !categories.contains(t.category))
                 .toList();
             if (uncategorized.isNotEmpty) {
               sortGroup(uncategorized);
@@ -306,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final bool isEmpty =
               displayGroups.values.every((g) => g.isEmpty);
 
-          // ── Streak + confetti check ─────────────────
+          // ── Streak + confetti check ───────────────────
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final todayTasks = allTasks.where((task) {
               final due = task.dueDate;
@@ -321,7 +318,6 @@ class _HomeScreenState extends State<HomeScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               // 🎉 Confetti
               Align(
                 alignment: Alignment.topCenter,
@@ -331,18 +327,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   numberOfParticles: 30,
                   gravity: 0.3,
                   colors: [
-                    primary, Colors.pink, Colors.orange,
-                    Colors.green, Colors.blue,
+                    primary,
+                    Colors.pink,
+                    Colors.orange,
+                    Colors.green,
+                    Colors.blue,
                   ],
                 ),
               ),
 
-              // 👋 Greeting + streak + focus
+              // ─────────────────────────────────────────
+              // 👋 Header: Greeting + summary
+              // ─────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    // Greeting + summary
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,29 +352,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             _getGreeting(),
                             style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: isDark
-                                  ? Colors.white
-                                  : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            pendingCount == 0
-                                ? "All caught up! Great job."
-                                : "$pendingCount pending · $completedCount completed",
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark
-                                  ? Colors.white54
-                                  : Colors.black45,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                              color: isDark ? Colors.white : Colors.black87,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
 
                     // 🔥 Streak badge
                     GestureDetector(
@@ -388,51 +376,27 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: _streak > 0
-                              ? Colors.orange.withOpacity(0.15)
-                              : (isDark
-                                  ? const Color(0xFF2A2A2A)
-                                  : Colors.grey.shade100),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _streak > 0
-                                ? Colors.orange.withOpacity(0.4)
-                                : Colors.transparent,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.local_fire_department_rounded,
-                              size: 16,
-                              color: _streak > 0
-                                  ? Colors.orange
-                                  : Colors.grey.shade400,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "$_streak",
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: _streak > 0
-                                    ? Colors.orange
-                                    : Colors.grey.shade400,
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: _HeaderBadge(
+                        isDark: isDark,
+                        color: _streak > 0
+                            ? Colors.orange
+                            : Colors.grey.shade400,
+                        bgColor: _streak > 0
+                            ? Colors.orange.withOpacity(0.12)
+                            : (isDark
+                                ? const Color(0xFF2A2A2A)
+                                : Colors.grey.shade100),
+                        borderColor: _streak > 0
+                            ? Colors.orange.withOpacity(0.3)
+                            : Colors.transparent,
+                        icon: Icons.local_fire_department_rounded,
+                        label: "$_streak",
                       ),
                     ),
 
                     const SizedBox(width: 8),
 
-                    // 🎯 Focus mode
+                    // 🎯 Focus mode badge
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
@@ -442,71 +406,65 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: primary.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                                Icons.center_focus_strong_rounded,
-                                size: 16,
-                                color: primary),
-                            const SizedBox(width: 4),
-                            Text(
-                              "Focus",
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: primary,
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: _HeaderBadge(
+                        isDark: isDark,
+                        color: primary,
+                        bgColor: primary.withOpacity(0.1),
+                        borderColor: primary.withOpacity(0.2),
+                        icon: Icons.center_focus_strong_rounded,
+                        label: "Focus",
                       ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
 
-              // 💬 Motivational quote card
+              // ─────────────────────────────────────────
+              // 💬 Quote card — refined
+              // ─────────────────────────────────────────
               Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+                      horizontal: 14, vertical: 11),
                   decoration: BoxDecoration(
-                    color: primary.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
+                    color: isDark
+                        ? const Color(0xFF1E1E1E)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: primary.withOpacity(0.15),
+                      color: isDark
+                          ? Colors.white.withOpacity(0.06)
+                          : Colors.black.withOpacity(0.06),
                       width: 1,
                     ),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.format_quote_rounded,
-                          size: 18,
-                          color: primary.withOpacity(0.6)),
-                      const SizedBox(width: 8),
+                      // Accent left bar
+                      Container(
+                        width: 3,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: primary.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _todayQuote,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 12.5,
                             fontStyle: FontStyle.italic,
                             color: isDark
-                                ? Colors.white60
+                                ? Colors.white54
                                 : Colors.black54,
-                            height: 1.4,
+                            height: 1.5,
                           ),
                         ),
                       ),
@@ -515,154 +473,149 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+              // ─────────────────────────────────────────
               // 🔍 Search bar
+              // ─────────────────────────────────────────
               Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: TextField(
                   onChanged: (value) =>
                       setState(() => searchQuery = value),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
                   decoration: InputDecoration(
                     hintText: "Search tasks...",
-                    prefixIcon:
-                        const Icon(Icons.search, size: 18),
+                    hintStyle: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      size: 18,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
                     filled: true,
-                    fillColor: searchFill,
+                    fillColor: isDark
+                        ? const Color(0xFF1E1E1E)
+                        : Colors.white,
                     isDense: true,
                     contentPadding:
-                        const EdgeInsets.symmetric(vertical: 10),
+                        const EdgeInsets.symmetric(vertical: 11),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                      borderSide: BorderSide(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.06)
+                            : Colors.black.withOpacity(0.06),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.06)
+                            : Colors.black.withOpacity(0.06),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: primary.withOpacity(0.4),
+                        width: 1.5,
+                      ),
                     ),
                   ),
                 ),
               ),
 
+              // ─────────────────────────────────────────
               // 🔥 Filter chips
+              // ─────────────────────────────────────────
               Padding(
-                padding:
-                    const EdgeInsets.only(left: 12, bottom: 10),
+                padding: const EdgeInsets.only(left: 12, bottom: 12),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _filterChip("All", FilterType.all, primary,
-                          isDark, count: allTasks.length),
+                      _filterChip("All", FilterType.all, primary, isDark,
+                          count: allTasks.length),
                       const SizedBox(width: 6),
-                      _filterChip("Today", FilterType.today,
-                          primary, isDark, count: todayCount),
+                      _filterChip(
+                          "Today", FilterType.today, primary, isDark,
+                          count: todayCount),
                       const SizedBox(width: 6),
-                      _filterChip("Upcoming", FilterType.upcoming,
-                          primary, isDark, count: upcomingCount),
+                      _filterChip(
+                          "Upcoming", FilterType.upcoming, primary, isDark,
+                          count: upcomingCount),
                       const SizedBox(width: 6),
-                      _filterChip("Pending", FilterType.pending,
-                          primary, isDark, count: pendingCount),
+                      _filterChip(
+                          "Pending", FilterType.pending, primary, isDark,
+                          count: pendingCount),
                       const SizedBox(width: 6),
-                      _filterChip("Done", FilterType.completed,
-                          primary, isDark, count: completedCount),
+                      _filterChip(
+                          "Done", FilterType.completed, primary, isDark,
+                          count: completedCount),
                     ],
                   ),
                 ),
               ),
 
-              // 📋 Task list — AnimatedSwitcher for smooth filter transitions
+              // ─────────────────────────────────────────
+              // 📋 Task list
+              // ─────────────────────────────────────────
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 250),
                   switchInCurve: Curves.easeOut,
                   switchOutCurve: Curves.easeIn,
                   child: isEmpty
-                    ? _emptyState(context)
-                    : ListView(
-                        key: ValueKey(selectedFilter.toString() + searchQuery),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12),
-                        children: displayGroups.entries
-                            .where((e) => e.value.isNotEmpty)
-                            .map((entry) {
-                          final headerColor = useSmartFlow
-                              ? _groupHeaderColor(
-                                  entry.key, primary)
-                              : primary;
+                      ? _emptyState(context)
+                      : ListView(
+                          key: ValueKey(
+                              selectedFilter.toString() + searchQuery),
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
+                          children: displayGroups.entries
+                              .where((e) => e.value.isNotEmpty)
+                              .map((entry) {
+                            final headerColor = useSmartFlow
+                                ? _groupHeaderColor(entry.key, primary)
+                                : primary;
 
-                          return Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 14),
+                            return Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 16),
 
-                              // Group header
-                              Row(
-                                children: [
-                                  // Colored dot for smart groups
-                                  if (useSmartFlow)
-                                    Container(
-                                      width: 7,
-                                      height: 7,
-                                      margin: const EdgeInsets
-                                          .only(right: 6),
-                                      decoration: BoxDecoration(
-                                        color: headerColor,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  Text(
-                                    entry.key,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: headerColor
-                                          .withOpacity(
-                                              isDark ? 0.9 : 0.75),
-                                      letterSpacing: 0.3,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                            horizontal: 7,
-                                            vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: headerColor
-                                          .withOpacity(0.12),
-                                      borderRadius:
-                                          BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      "${entry.value.length}",
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: headerColor,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                // ── Group header ────────────────
+                                _GroupHeader(
+                                  label: entry.key,
+                                  count: entry.value.length,
+                                  color: headerColor,
+                                  isDark: isDark,
+                                ),
 
-                              const SizedBox(height: 6),
+                                const SizedBox(height: 8),
 
-                              ...entry.value.map((task) =>
-                                  _buildTaskItem(task, primary)),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                  ),
+                                ...entry.value.map((task) =>
+                                    _buildTaskItem(task, primary)),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                ),
               ),
             ],
           );
         },
       ),
-
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-                builder: (_) => const AddTaskScreen()),
+            MaterialPageRoute(builder: (_) => const AddTaskScreen()),
           );
         },
         child: const Icon(Icons.add),
@@ -670,9 +623,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Task card
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────
+  // Task card — original unchanged
+  // ─────────────────────────────────────────────────
   Widget _buildTaskItem(Task task, Color primary) {
     final date = task.dueDate;
     final isOverdue = date != null &&
@@ -766,128 +719,128 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Card(
             margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
-          child: IntrinsicHeight(
-            child: Row(
-              children: [
-                Container(
-                  width: 4,
-                  color: getPriorityColor(task.priority),
-                ),
-                Expanded(
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              AddTaskScreen(task: task),
-                        ),
-                      );
-                    },
-                    leading: GestureDetector(
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        task.isCompleted = !task.isCompleted;
-                        task.save();
+            child: IntrinsicHeight(
+              child: Row(
+                children: [
+                  Container(
+                    width: 4,
+                    color: getPriorityColor(task.priority),
+                  ),
+                  Expanded(
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                AddTaskScreen(task: task),
+                          ),
+                        );
                       },
-                      child: AnimatedScale(
-                        scale: task.isCompleted ? 1.1 : 1.0,
-                        duration:
-                            const Duration(milliseconds: 150),
-                        child: Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            borderRadius:
-                                BorderRadius.circular(5),
-                            color: task.isCompleted
-                                ? primary
-                                : Colors.transparent,
-                            border: Border.all(
+                      leading: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          task.isCompleted = !task.isCompleted;
+                          task.save();
+                        },
+                        child: AnimatedScale(
+                          scale: task.isCompleted ? 1.1 : 1.0,
+                          duration:
+                              const Duration(milliseconds: 150),
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              borderRadius:
+                                  BorderRadius.circular(5),
                               color: task.isCompleted
                                   ? primary
-                                  : Colors.grey.shade400,
-                              width: 1.5,
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: task.isCompleted
+                                    ? primary
+                                    : Colors.grey.shade400,
+                                width: 1.5,
+                              ),
                             ),
+                            child: task.isCompleted
+                                ? const Icon(Icons.check,
+                                    size: 14,
+                                    color: Colors.white)
+                                : null,
                           ),
-                          child: task.isCompleted
-                              ? const Icon(Icons.check,
-                                  size: 14,
-                                  color: Colors.white)
+                        ),
+                      ),
+                      title: Text(
+                        task.title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
                               : null,
                         ),
                       ),
-                    ),
-                    title: Text(
-                      task.title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        decoration: task.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          if (date != null)
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.access_time_rounded,
-                                  size: 11,
-                                  color: isOverdue
-                                      ? Colors.red.shade400
-                                      : Colors.grey.shade500,
-                                ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  DateFormat('dd MMM · hh:mm a')
-                                      .format(date),
-                                  style: TextStyle(
-                                    fontSize: 11,
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            if (date != null)
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.access_time_rounded,
+                                    size: 11,
                                     color: isOverdue
                                         ? Colors.red.shade400
                                         : Colors.grey.shade500,
                                   ),
-                                ),
-                              ],
-                            ),
-                          if (task.description != null &&
-                              task.description!.isNotEmpty)
-                            Padding(
-                              padding:
-                                  const EdgeInsets.only(top: 2),
-                              child: Text(
-                                task.description!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade500,
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    DateFormat('dd MMM · hh:mm a')
+                                        .format(date),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isOverdue
+                                          ? Colors.red.shade400
+                                          : Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            if (task.description != null &&
+                                task.description!.isNotEmpty)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  task.description!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade500,
+                                  ),
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-        ),
     );
   }
 
-  // ── Context-aware empty state ──────────────────
+  // ── Context-aware empty state ────────────────────
   String _emptyTitle() {
     final hour = DateTime.now().hour;
     if (hour < 12) return "Start your day strong";
@@ -920,7 +873,8 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 4),
             Text(
               _emptySubtitle(),
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+              style:
+                  TextStyle(color: Colors.grey.shade500, fontSize: 13),
               textAlign: TextAlign.center,
             ),
           ],
@@ -937,15 +891,22 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () => setState(() => selectedFilter = type),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: isSelected
               ? primary
               : isDark
                   ? const Color(0xFF2A2A2A)
-                  : Colors.grey.shade200,
+                  : Colors.white,
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? Colors.transparent
+                : isDark
+                    ? Colors.white.withOpacity(0.08)
+                    : Colors.black.withOpacity(0.08),
+            width: 1,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -966,12 +927,12 @@ class _HomeScreenState extends State<HomeScreen> {
             if (count > 0) ...[
               const SizedBox(width: 5),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 5, vertical: 1),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? Colors.white.withOpacity(0.25)
-                      : primary.withOpacity(0.15),
+                      : primary.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -987,6 +948,111 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────
+// Reusable sub-widgets
+// ─────────────────────────────────────────────────────
+
+/// Header badge — used for streak and focus buttons
+class _HeaderBadge extends StatelessWidget {
+  final bool isDark;
+  final Color color;
+  final Color bgColor;
+  final Color borderColor;
+  final IconData icon;
+  final String label;
+
+  const _HeaderBadge({
+    required this.isDark,
+    required this.color,
+    required this.bgColor,
+    required this.borderColor,
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Group header — pill-style label with count badge
+class _GroupHeader extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final bool isDark;
+
+  const _GroupHeader({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: color.withOpacity(isDark ? 1.0 : 0.85),
+              letterSpacing: 0.2,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            "$count",
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color.withOpacity(isDark ? 0.9 : 0.75),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
