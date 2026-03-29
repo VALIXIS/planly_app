@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import '../../../main.dart' show accentColorNotifier;
 
 /// 🌅 SplashScreen
-/// Shows a motivational quote with a time-based gradient background.
-/// Quote + design changes 3 times per day (Morning / Afternoon / Evening).
-/// Auto-navigates to MainScreen after 3 seconds with a fade transition.
+/// - Gradient uses the user's chosen accent color
+/// - Quote + design changes 3x per day (Morning / Afternoon / Evening)
+/// - Respects "Show quote on splash" setting
+/// - Auto-navigates after 3 seconds with fade transition
 class SplashScreen extends StatefulWidget {
   final Widget nextScreen;
   const SplashScreen({super.key, required this.nextScreen});
@@ -18,7 +21,7 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _fadeIn;
   late Animation<double> _slideUp;
 
-  // ── Time slot: 0=Morning, 1=Afternoon, 2=Evening ──
+  // Time slot: 0=Morning, 1=Afternoon, 2=Evening
   int get _timeSlot {
     final hour = DateTime.now().hour;
     if (hour < 12) return 0;
@@ -26,9 +29,12 @@ class _SplashScreenState extends State<SplashScreen>
     return 2;
   }
 
-  // ── 45 quotes — 15 per time slot ──────────────────
+  bool get _showQuote =>
+      Hive.box('settings').get('showSplashQuote', defaultValue: true) as bool;
+
+  // 45 quotes — 15 per time slot
   final List<List<String>> _quotesBySlot = [
-    // 🌅 Morning quotes (slot 0)
+    // 🌅 Morning
     [
       "Today is a fresh start. Make it count.",
       "Rise up and attack the day with enthusiasm.",
@@ -46,7 +52,7 @@ class _SplashScreenState extends State<SplashScreen>
       "One productive morning changes your entire day.",
       "Make each morning a masterpiece.",
     ],
-    // ☀️ Afternoon quotes (slot 1)
+    // ☀️ Afternoon
     [
       "Keep the momentum going. You've already started.",
       "Halfway through — don't stop now.",
@@ -64,7 +70,7 @@ class _SplashScreenState extends State<SplashScreen>
       "Productivity is never an accident.",
       "Keep going. The best is yet to come.",
     ],
-    // 🌙 Evening quotes (slot 2)
+    // 🌙 Evening
     [
       "Wrap up strong. Finish what you started.",
       "How you end your day defines tomorrow.",
@@ -84,76 +90,62 @@ class _SplashScreenState extends State<SplashScreen>
     ],
   ];
 
-  // Pick quote based on time slot + day rotation
   String get _currentQuote {
     final slot = _timeSlot;
     final quotes = _quotesBySlot[slot];
-    final dayIndex =
-        DateTime.now().difference(DateTime(DateTime.now().year, 1, 1)).inDays;
+    final dayIndex = DateTime.now()
+        .difference(DateTime(DateTime.now().year, 1, 1))
+        .inDays;
     return quotes[dayIndex % quotes.length];
   }
 
-  // ── Design config per time slot ────────────────────
-  _SlotDesign get _design => _designs[_timeSlot];
-
-  final List<_SlotDesign> _designs = [
-    // 🌅 Morning — warm sunrise purples + gold
-    _SlotDesign(
-      gradientColors: [
-        const Color(0xFF1A0533),
-        const Color(0xFF3D1273),
-        const Color(0xFF6B2FA0),
-        const Color(0xFFB06AB3),
-      ],
-      gradientStops: [0.0, 0.3, 0.65, 1.0],
-      glowColor: const Color(0xFFB06AB3),
-      accentColor: const Color(0xFFFFD700),
-      label: "Morning",
-      labelIcon: Icons.wb_sunny_rounded,
-      tagline: "Start strong. Own your day.",
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ),
-    // ☀️ Afternoon — deep blue ocean
-    _SlotDesign(
-      gradientColors: [
-        const Color(0xFF0A1628),
-        const Color(0xFF0D2B55),
-        const Color(0xFF1565C0),
-        const Color(0xFF1E88E5),
-      ],
-      gradientStops: [0.0, 0.3, 0.65, 1.0],
-      glowColor: const Color(0xFF1E88E5),
-      accentColor: const Color(0xFF64B5F6),
-      label: "Afternoon",
-      labelIcon: Icons.wb_cloudy_rounded,
-      tagline: "Keep the momentum going.",
-      begin: Alignment.topRight,
-      end: Alignment.bottomLeft,
-    ),
-    // 🌙 Evening — dark teal midnight
-    _SlotDesign(
-      gradientColors: [
-        const Color(0xFF0A1A1A),
-        const Color(0xFF0D3333),
-        const Color(0xFF00695C),
-        const Color(0xFF00897B),
-      ],
-      gradientStops: [0.0, 0.3, 0.65, 1.0],
-      glowColor: const Color(0xFF00897B),
-      accentColor: const Color(0xFF80CBC4),
-      label: "Evening",
-      labelIcon: Icons.nights_stay_rounded,
-      tagline: "Finish strong. Rest well.",
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-    ),
+  // Time-of-day labels + icons
+  final List<String> _labels = ["Morning", "Afternoon", "Evening"];
+  final List<IconData> _icons = [
+    Icons.wb_sunny_rounded,
+    Icons.wb_cloudy_rounded,
+    Icons.nights_stay_rounded,
   ];
+  final List<String> _taglines = [
+    "Start strong. Own your day.",
+    "Keep the momentum going.",
+    "Finish strong. Rest well.",
+  ];
+
+  // Gradient direction changes per slot
+  final List<List<Alignment>> _directions = [
+    [Alignment.topLeft, Alignment.bottomRight],
+    [Alignment.topRight, Alignment.bottomLeft],
+    [Alignment.topCenter, Alignment.bottomCenter],
+  ];
+
+  // Builds gradient using user's accent color
+  List<Color> _buildGradient(Color accent) {
+    // Darken the accent for the dark end of the gradient
+    final dark = Color.fromARGB(
+      255,
+      (accent.red * 0.15).round(),
+      (accent.green * 0.10).round(),
+      (accent.blue * 0.15).round(),
+    );
+    final mid = Color.fromARGB(
+      255,
+      (accent.red * 0.35).round(),
+      (accent.green * 0.25).round(),
+      (accent.blue * 0.40).round(),
+    );
+    final light = Color.fromARGB(
+      255,
+      (accent.red * 0.65).round(),
+      (accent.green * 0.50).round(),
+      (accent.blue * 0.70).round(),
+    );
+    return [dark, mid, light, accent.withOpacity(0.75)];
+  }
 
   @override
   void initState() {
     super.initState();
-
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -162,10 +154,8 @@ class _SplashScreenState extends State<SplashScreen>
     _slideUp = Tween<double>(begin: 28, end: 0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
-
     _controller.forward();
 
-    // Auto-navigate after 3 seconds with fade
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -189,60 +179,63 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final design = _design;
+    final slot = _timeSlot;
+    final showQuote = _showQuote;
+
+    // Use user's accent color for gradient
+    final accent = accentColorNotifier.value;
+    final gradientColors = _buildGradient(accent);
+    final glowColor = accent;
+    // Accent highlight — lighter tint for badges/dots
+    final highlight = Color.fromARGB(
+      255,
+      (accent.red + (255 - accent.red) * 0.5).round(),
+      (accent.green + (255 - accent.green) * 0.5).round(),
+      (accent.blue + (255 - accent.blue) * 0.5).round(),
+    );
 
     return Scaffold(
       body: Stack(
         children: [
-          // ── Gradient background ───────────────────────
+          // ── Gradient background (accent-based) ────────
           Container(
             width: size.width,
             height: size.height,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: design.begin,
-                end: design.end,
-                colors: design.gradientColors,
-                stops: design.gradientStops,
+                begin: _directions[slot][0],
+                end: _directions[slot][1],
+                colors: gradientColors,
+                stops: const [0.0, 0.3, 0.65, 1.0],
               ),
             ),
           ),
 
-          // ── Glow circle — top right ───────────────────
+          // ── Glow circles ──────────────────────────────
           Positioned(
-            top: -80,
-            right: -80,
+            top: -80, right: -80,
             child: Container(
-              width: 280,
-              height: 280,
+              width: 280, height: 280,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: design.glowColor.withOpacity(0.18),
+                color: glowColor.withOpacity(0.18),
               ),
             ),
           ),
-
-          // ── Glow circle — bottom left ─────────────────
           Positioned(
-            bottom: 60,
-            left: -100,
+            bottom: 60, left: -100,
             child: Container(
-              width: 320,
-              height: 320,
+              width: 320, height: 320,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: design.glowColor.withOpacity(0.12),
+                color: glowColor.withOpacity(0.12),
               ),
             ),
           ),
-
-          // ── Small accent circle — mid right ───────────
           Positioned(
-            top: size.height * 0.42,
-            right: -30,
+            top: size.height * 0.42, right: -30,
             child: Container(
-              width: 130,
-              height: 130,
+              width: 130, height: 130,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withOpacity(0.04),
@@ -250,15 +243,11 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
 
-          // ── Horizontal accent line ────────────────────
+          // ── Subtle horizontal line ─────────────────────
           Positioned(
-            top: size.height * 0.52,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 1,
-              color: Colors.white.withOpacity(0.05),
-            ),
+            top: size.height * 0.52, left: 0, right: 0,
+            child: Container(height: 1,
+                color: Colors.white.withOpacity(0.05)),
           ),
 
           // ── Main content ──────────────────────────────
@@ -277,86 +266,83 @@ class _SplashScreenState extends State<SplashScreen>
                         children: [
                           const Spacer(flex: 2),
 
-                          // Time-of-day label badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: design.accentColor.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: design.accentColor.withOpacity(0.3),
-                                width: 1,
+                          if (showQuote) ...[
+                            // Time-of-day badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: highlight.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: highlight.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(_icons[slot],
+                                      size: 13, color: highlight),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _labels[slot],
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: highlight,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  design.labelIcon,
-                                  size: 13,
-                                  color: design.accentColor,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  design.label,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: design.accentColor,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
+
+                            const SizedBox(height: 28),
+
+                            // Decorative quote mark
+                            Text(
+                              "\u201C",
+                              style: TextStyle(
+                                fontSize: 72,
+                                height: 0.8,
+                                color: Colors.white.withOpacity(0.12),
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
-                          ),
 
-                          const SizedBox(height: 28),
+                            const SizedBox(height: 8),
 
-                          // Large decorative quote mark
-                          Text(
-                            "\u201C",
-                            style: TextStyle(
-                              fontSize: 72,
-                              height: 0.8,
-                              color: Colors.white.withOpacity(0.12),
-                              fontWeight: FontWeight.w900,
+                            // Quote text
+                            Text(
+                              _currentQuote,
+                              style: const TextStyle(
+                                fontSize: 21,
+                                fontWeight: FontWeight.w300,
+                                color: Colors.white,
+                                height: 1.6,
+                                letterSpacing: 0.1,
+                              ),
                             ),
-                          ),
 
-                          const SizedBox(height: 8),
+                            const SizedBox(height: 24),
 
-                          // Quote text
-                          Text(
-                            _currentQuote,
-                            style: const TextStyle(
-                              fontSize: 21,
-                              fontWeight: FontWeight.w300,
-                              color: Colors.white,
-                              height: 1.6,
-                              letterSpacing: 0.1,
+                            // Accent divider
+                            Container(
+                              width: 36, height: 2.5,
+                              decoration: BoxDecoration(
+                                color: highlight.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          // Accent divider
-                          Container(
-                            width: 36,
-                            height: 2.5,
-                            decoration: BoxDecoration(
-                              color: design.accentColor.withOpacity(0.6),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
+                          ],
 
                           const Spacer(flex: 3),
 
-                          // App name + tagline at bottom
+                          // App name + tagline
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // App name
                               const Text(
                                 "Planly",
                                 style: TextStyle(
@@ -367,12 +353,9 @@ class _SplashScreenState extends State<SplashScreen>
                                   height: 1.0,
                                 ),
                               ),
-
                               const SizedBox(height: 6),
-
-                              // Tagline — changes per time slot
                               Text(
-                                design.tagline,
+                                _taglines[slot],
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w400,
@@ -380,12 +363,8 @@ class _SplashScreenState extends State<SplashScreen>
                                   letterSpacing: 0.4,
                                 ),
                               ),
-
                               const SizedBox(height: 36),
-
-                              // Animated loading dots
-                              _DotsLoader(accentColor: design.accentColor),
-
+                              _DotsLoader(accentColor: highlight),
                               const SizedBox(height: 36),
                             ],
                           ),
@@ -401,33 +380,6 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
-}
-
-// ─────────────────────────────────────────────
-// Design config per time slot
-// ─────────────────────────────────────────────
-class _SlotDesign {
-  final List<Color> gradientColors;
-  final List<double> gradientStops;
-  final Color glowColor;
-  final Color accentColor;
-  final String label;
-  final IconData labelIcon;
-  final String tagline;
-  final Alignment begin;
-  final Alignment end;
-
-  const _SlotDesign({
-    required this.gradientColors,
-    required this.gradientStops,
-    required this.glowColor,
-    required this.accentColor,
-    required this.label,
-    required this.labelIcon,
-    required this.tagline,
-    required this.begin,
-    required this.end,
-  });
 }
 
 // ─────────────────────────────────────────────
@@ -472,8 +424,7 @@ class _DotsLoaderState extends State<_DotsLoader>
             final opacity = (1.0 - val * 2).clamp(0.2, 1.0);
             return Container(
               margin: const EdgeInsets.only(right: 6),
-              width: 5,
-              height: 5,
+              width: 5, height: 5,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: widget.accentColor.withOpacity(opacity),

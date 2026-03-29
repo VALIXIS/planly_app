@@ -373,8 +373,9 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 10),
 
               // ─────────────────────────────────────────
-              // 💬 Quote card
+              // 💬 Quote card — shown only if setting is ON
               // ─────────────────────────────────────────
+              if (Hive.box('settings').get('showHomeQuote', defaultValue: true) as bool)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                 child: Container(
