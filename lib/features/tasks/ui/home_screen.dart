@@ -373,50 +373,65 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 10),
 
               // ─────────────────────────────────────────
-              // 💬 Quote card — shown only if setting is ON
+              // 💬 Quote card — listens to settings box
+              // so it rebuilds instantly when toggled
               // ─────────────────────────────────────────
-              if (Hive.box('settings').get('showHomeQuote', defaultValue: true) as bool)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.06)
-                          : Colors.black.withOpacity(0.06),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 3,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: primary.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _todayQuote,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontStyle: FontStyle.italic,
-                            color: isDark ? Colors.white54 : Colors.black54,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              ValueListenableBuilder(
+                valueListenable: Hive.box('settings').listenable(
+                  keys: ['showHomeQuote'],
                 ),
+                builder: (context, settingsBox, _) {
+                  final showQuote = (settingsBox as dynamic)
+                      .get('showHomeQuote', defaultValue: true) as bool;
+                  if (!showQuote) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF1E1E1E)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.06)
+                              : Colors.black.withOpacity(0.06),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 3,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: primary.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _todayQuote,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontStyle: FontStyle.italic,
+                                color: isDark
+                                    ? Colors.white54
+                                    : Colors.black54,
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
 
               // ─────────────────────────────────────────
