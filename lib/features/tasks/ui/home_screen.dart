@@ -22,91 +22,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   FilterType selectedFilter = FilterType.all;
   String searchQuery = "";
-  Task? _getSuggestedTask(List<Task> tasks) {
-    final now = DateTime.now();
-
-    // Only pending tasks
-    final pending = tasks.where((t) => !t.isCompleted).toList();
-    if (pending.isEmpty) return null;
-
-    // Sort logic
-    pending.sort((a, b) {
-      final aDue = a.dueDate;
-      final bDue = b.dueDate;
-
-      // Overdue first
-      final aOverdue = aDue != null && aDue.isBefore(now);
-      final bOverdue = bDue != null && bDue.isBefore(now);
-
-      if (aOverdue != bOverdue) {
-        return aOverdue ? -1 : 1;
-      }
-
-      // Today first
-      if (aDue != null && bDue != null) {
-        final aToday = isSameDay(aDue, now);
-        final bToday = isSameDay(bDue, now);
-
-        if (aToday != bToday) {
-          return aToday ? -1 : 1;
-        }
-
-        // Earlier time first
-        return aDue.compareTo(bDue);
-      }
-
-      // Priority fallback
-      const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
-      return (priorityOrder[a.priority] ?? 1).compareTo(
-        priorityOrder[b.priority] ?? 1,
-      );
-    });
-
-    return pending.first;
-  }
-
-  void _maybeShowReflection(
-    double pct,
-    int completed,
-    int total,
-    List<Task> todayTasks,
-  ) {
-    final settings = Hive.box('settings');
-
-    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
-
-    final lastShown = settings.get('lastReflectionDate', defaultValue: '');
-
-    if (lastShown == todayStr) return;
-    if (total == 0) return;
-
-    settings.put('lastReflectionDate', todayStr);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => DailyReflectionScreen(
-            pct: pct,
-            completed: completed,
-            total: total,
-            onContinue: () {
-              Navigator.pop(context);
-
-              final pending = todayTasks.where((t) => !t.isCompleted).toList();
-
-              if (pending.isNotEmpty) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const FocusModeScreen()),
-                );
-              }
-            },
-          ),
-        ),
-      );
-    });
-  }
 
   // ── Multi-select state ─────────────────────────
   bool _isSelectionMode = false;
@@ -191,6 +106,77 @@ class _HomeScreenState extends State<HomeScreen> {
     _confettiController.play();
   }
 
+  // ── Smart suggestion: best pending task ────────
+  Task? _getSuggestedTask(List<Task> tasks) {
+    final now = DateTime.now();
+    final pending = tasks.where((t) => !t.isCompleted).toList();
+    if (pending.isEmpty) return null;
+
+    const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
+    pending.sort((a, b) {
+      final aDue = a.dueDate;
+      final bDue = b.dueDate;
+      final aOverdue = aDue != null && aDue.isBefore(now);
+      final bOverdue = bDue != null && bDue.isBefore(now);
+
+      if (aOverdue != bOverdue) return aOverdue ? -1 : 1;
+
+      if (aDue != null && bDue != null) {
+        final aToday = isSameDay(aDue, now);
+        final bToday = isSameDay(bDue, now);
+        if (aToday != bToday) return aToday ? -1 : 1;
+        return aDue.compareTo(bDue);
+      }
+
+      return (priorityOrder[a.priority] ?? 1).compareTo(
+        priorityOrder[b.priority] ?? 1,
+      );
+    });
+
+    return pending.first;
+  }
+
+  // ── Daily reflection — show once per day ──────
+  void _maybeShowReflection(
+    double pct,
+    int completed,
+    int total,
+    List<Task> todayTasks,
+  ) {
+    final settings = Hive.box('settings');
+    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+    final lastShown =
+        settings.get('lastReflectionDate', defaultValue: '') as String;
+
+    if (lastShown == todayStr) return;
+    if (total == 0) return;
+
+    settings.put('lastReflectionDate', todayStr);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DailyReflectionScreen(
+            pct: pct,
+            completed: completed,
+            total: total,
+            onContinue: () {
+              Navigator.pop(context);
+              final pending = todayTasks.where((t) => !t.isCompleted).toList();
+              if (pending.isNotEmpty) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const FocusModeScreen()),
+                );
+              }
+            },
+          ),
+        ),
+      );
+    });
+  }
+
   // ── Exit selection mode ────────────────────────
   void _exitSelectionMode() {
     setState(() {
@@ -199,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // ── Bulk complete ──────────────────────────────
+  // ── Bulk complete / pending ────────────────────
   void _bulkComplete(bool markDone) {
     final box = Hive.box<Task>('tasks');
     for (final key in _selectedKeys) {
@@ -328,33 +314,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ── Daily reflection message ───────────────────
-  String _reflectionMessage(double pct) {
-    if (pct >= 1.0) {
-      return "You crushed it today. Every single task — done. That's not luck, that's discipline.";
-    } else if (pct >= 0.7) {
-      return "Strong day. You tackled the hard stuff and kept moving. Tomorrow starts with momentum.";
-    } else if (pct >= 0.4) {
-      return "Solid effort. Progress isn't always perfect — it's consistent. You showed up.";
-    } else {
-      return "Not every day is a sprint. Rest, reset, and come back stronger. You've got this.";
-    }
-  }
-
-  String _reflectionLabel(double pct) {
-    if (pct >= 1.0) return "Excellent Day";
-    if (pct >= 0.7) return "Great Progress";
-    if (pct >= 0.4) return "Good Effort";
-    return "Keep Going";
-  }
-
-  Color _reflectionColor(double pct) {
-    if (pct >= 1.0) return const Color(0xFF4CAF50);
-    if (pct >= 0.7) return const Color(0xFF26A69A);
-    if (pct >= 0.4) return const Color(0xFF42A5F5);
-    return const Color(0xFFFF7043);
-  }
-
   @override
   Widget build(BuildContext context) {
     final box = Hive.box<Task>('tasks');
@@ -367,10 +326,10 @@ class _HomeScreenState extends State<HomeScreen> {
         valueListenable: box.listenable(),
         builder: (context, Box<Task> box, _) {
           final allTasks = box.values.toList();
-          final suggestedTask = _getSuggestedTask(allTasks);
           final now = DateTime.now();
+          final suggestedTask = _getSuggestedTask(allTasks);
 
-          // ── Counts ────────────────────────────────
+          // ── Counts ──────────────────────────────
           final todayCount = allTasks.where((t) {
             final due = t.dueDate;
             if (due == null) return false;
@@ -384,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final pendingCount = allTasks.where((t) => !t.isCompleted).length;
           final completedCount = allTasks.where((t) => t.isCompleted).length;
 
-          // ── Today's tasks for reflection card ─────
+          // ── Today tasks for reflection ───────────
           final todayTasks = allTasks.where((t) {
             final due = t.dueDate;
             if (due == null) return false;
@@ -396,7 +355,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ? 0.0
               : todayCompleted / todayTotal;
 
-          // ── Filter ────────────────────────────────
+          // ── Filter ───────────────────────────────
           List<Task> tasks = [];
           if (selectedFilter == FilterType.all) {
             tasks = allTasks;
@@ -428,6 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 .toList();
           }
 
+          // ── Sort ─────────────────────────────────
           const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
           void sortGroup(List<Task> group) {
             group.sort((a, b) {
@@ -438,6 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
             });
           }
 
+          // ── Display groups ───────────────────────
           Map<String, List<Task>> displayGroups = {};
           bool useSmartFlow =
               selectedFilter == FilterType.all ||
@@ -468,16 +429,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final bool isEmpty = displayGroups.values.every((g) => g.isEmpty);
 
-          // Show reflection card only for all/today filters
-          // and only when there are today tasks
-          final bool showReflection =
-              (selectedFilter == FilterType.all ||
-                  selectedFilter == FilterType.today) &&
-              todayTotal > 0;
-
+          // ── Post frame callbacks ─────────────────
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _checkAndUpdateStreak(todayTasks);
-
             _maybeShowReflection(
               reflectionPct,
               todayCompleted,
@@ -508,12 +462,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
               // ─────────────────────────────────────
-              // 🔲 Selection mode AppBar OR normal header
+              // Selection bar OR normal header
               // ─────────────────────────────────────
               if (_isSelectionMode)
                 _buildSelectionBar(isDark, primary)
               else ...[
-                // Normal header with soft shapes
+                // Header with soft shapes
                 ClipRect(
                   child: SizedBox(
                     height: 90,
@@ -545,6 +499,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
+
+                              // 🔥 Streak badge
                               GestureDetector(
                                 onTap: () {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -575,7 +531,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                   label: "$_streak",
                                 ),
                               ),
+
                               const SizedBox(width: 8),
+
+                              // 🎯 Focus mode badge
                               GestureDetector(
                                 onTap: () => Navigator.push(
                                   context,
@@ -602,7 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 10),
 
-                // Quote card
+                // 💬 Quote card (toggleable)
                 ValueListenableBuilder(
                   valueListenable: Hive.box(
                     'settings',
@@ -666,18 +625,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                 ),
-                if (!_isSelectionMode && suggestedTask != null)
+
+                // 💡 Smart suggestion card
+                if (suggestedTask != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                     child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const FocusModeScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const FocusModeScreen(),
+                        ),
+                      ),
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
@@ -706,7 +665,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             const SizedBox(width: 10),
-
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -750,9 +708,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ],
                               ),
                             ),
-
                             const SizedBox(width: 8),
-
                             Icon(
                               Icons.play_arrow_rounded,
                               size: 20,
@@ -880,36 +836,31 @@ class _HomeScreenState extends State<HomeScreen> {
                             selectedFilter.toString() + searchQuery,
                           ),
                           padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-                          children: [
-                            ...displayGroups.entries
-                                .where((e) => e.value.isNotEmpty)
-                                .map((entry) {
-                                  final headerColor = useSmartFlow
-                                      ? _groupHeaderColor(entry.key, primary)
-                                      : primary;
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const SizedBox(height: 16),
-                                      _GroupHeader(
-                                        label: entry.key,
-                                        count: entry.value.length,
-                                        color: headerColor,
-                                        isDark: isDark,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ...entry.value.map(
-                                        (task) => _buildTaskItem(
-                                          task,
-                                          primary,
-                                          isDark,
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }),
-                          ],
+                          children: displayGroups.entries
+                              .where((e) => e.value.isNotEmpty)
+                              .map((entry) {
+                                final headerColor = useSmartFlow
+                                    ? _groupHeaderColor(entry.key, primary)
+                                    : primary;
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 16),
+                                    _GroupHeader(
+                                      label: entry.key,
+                                      count: entry.value.length,
+                                      color: headerColor,
+                                      isDark: isDark,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ...entry.value.map(
+                                      (task) =>
+                                          _buildTaskItem(task, primary, isDark),
+                                    ),
+                                  ],
+                                );
+                              })
+                              .toList(),
                         ),
                 ),
               ),
@@ -919,7 +870,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
 
       floatingActionButton: _isSelectionMode
-          ? null // Hide FAB in selection mode
+          ? null
           : FloatingActionButton(
               onPressed: () {
                 Navigator.push(
@@ -951,14 +902,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Row(
         children: [
-          // Close / back
           IconButton(
             icon: const Icon(Icons.close_rounded),
             onPressed: _exitSelectionMode,
             tooltip: "Exit selection",
           ),
-
-          // Count
           Text(
             "${_selectedKeys.length} selected",
             style: TextStyle(
@@ -967,25 +915,18 @@ class _HomeScreenState extends State<HomeScreen> {
               color: isDark ? Colors.white : Colors.black87,
             ),
           ),
-
           const Spacer(),
-
-          // Mark complete
           if (_selectedKeys.isNotEmpty) ...[
             IconButton(
               icon: Icon(Icons.check_circle_outline_rounded, color: primary),
               tooltip: "Mark as complete",
               onPressed: () => _bulkComplete(true),
             ),
-
-            // Mark pending
             IconButton(
               icon: Icon(Icons.radio_button_unchecked_rounded, color: primary),
               tooltip: "Mark as pending",
               onPressed: () => _bulkComplete(false),
             ),
-
-            // Delete
             IconButton(
               icon: Icon(
                 Icons.delete_outline_rounded,
@@ -1001,157 +942,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ─────────────────────────────────────────────
-  // Daily Reflection Card
-  // ─────────────────────────────────────────────
-  Widget _buildReflectionCard({
-    required bool isDark,
-    required Color primary,
-    required int completed,
-    required int total,
-    required double pct,
-  }) {
-    final color = _reflectionColor(pct);
-    final label = _reflectionLabel(pct);
-    final message = _reflectionMessage(pct);
-    final percent = (pct * 100).round();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.25), width: 1),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Header row ──────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: color,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    "Daily Reflection",
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.white38 : Colors.black38,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Progress bar ────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "$completed of $total tasks completed",
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        "$percent%",
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: color,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Animated progress bar
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: pct),
-                    duration: const Duration(milliseconds: 700),
-                    curve: Curves.easeOutCubic,
-                    builder: (_, value, __) {
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: value,
-                          minHeight: 7,
-                          backgroundColor: isDark
-                              ? Colors.white.withOpacity(0.08)
-                              : Colors.black.withOpacity(0.06),
-                          color: color,
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Message ─────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 3,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      message,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? Colors.white60 : Colors.black54,
-                        height: 1.5,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  // Task card — with multi-select support
+  // Task card with multi-select support
   // ─────────────────────────────────────────────
   Widget _buildTaskItem(Task task, Color primary, bool isDark) {
     final date = task.dueDate;
@@ -1160,7 +951,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final isSelected = _selectedKeys.contains(task.key);
 
     return GestureDetector(
-      // Long press → enter selection mode
       onLongPress: () {
         HapticFeedback.mediumImpact();
         setState(() {
@@ -1168,7 +958,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _selectedKeys.add(task.key);
         });
       },
-      // Tap in selection mode → toggle selection
       onTap: _isSelectionMode
           ? () {
               setState(() {
@@ -1183,7 +972,6 @@ class _HomeScreenState extends State<HomeScreen> {
           : null,
       child: Dismissible(
         key: Key(task.key.toString()),
-        // Disable swipe in selection mode
         direction: _isSelectionMode
             ? DismissDirection.none
             : DismissDirection.endToStart,
@@ -1259,7 +1047,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Card(
               margin: EdgeInsets.zero,
               clipBehavior: Clip.antiAlias,
-              // Highlight selected cards
               color: isSelected
                   ? (isDark
                         ? primary.withOpacity(0.18)
@@ -1291,8 +1078,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 );
                               },
-
-                        // Selection checkbox OR normal checkbox
                         leading: _isSelectionMode
                             ? AnimatedContainer(
                                 duration: const Duration(milliseconds: 150),
@@ -1352,7 +1137,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
-
                         title: Text(
                           task.title,
                           style: TextStyle(
@@ -1529,7 +1313,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ─────────────────────────────────────────────────────
-// 🎨 Soft shapes painter
+// 🎨 Decorative soft shapes painter
 // ─────────────────────────────────────────────────────
 class _SoftShapesPainter extends CustomPainter {
   final Color color;
