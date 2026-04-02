@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'features/tasks/ui/splash_screen.dart';
-import 'features/tasks/ui/splash_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'features/tasks/ui/home_screen.dart';
 import 'features/tasks/ui/calendar_screen.dart';
@@ -13,12 +12,12 @@ final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
 // 🌙 Global theme notifier
-final ValueNotifier<ThemeMode> themeNotifier =
-    ValueNotifier(ThemeMode.light);
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
 // 🎨 Global accent color notifier
-final ValueNotifier<Color> accentColorNotifier =
-    ValueNotifier(const Color(0xFF7C4DFF));
+final ValueNotifier<Color> accentColorNotifier = ValueNotifier(
+  const Color(0xFF7C4DFF),
+);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,10 +59,9 @@ class MyApp extends StatelessWidget {
           valueListenable: accentColorNotifier,
           builder: (context, accentColor, _) {
             // Derive a readable onPrimary color
-            final onPrimary =
-                accentColor.computeLuminance() > 0.4
-                    ? Colors.black
-                    : Colors.white;
+            final onPrimary = accentColor.computeLuminance() > 0.4
+                ? Colors.black
+                : Colors.white;
 
             return MaterialApp(
               title: 'Planly',
@@ -110,22 +108,21 @@ class MyApp extends StatelessWidget {
                 snackBarTheme: SnackBarThemeData(
                   behavior: SnackBarBehavior.floating,
                   backgroundColor: const Color(0xFF2E2E2E),
-                  contentTextStyle:
-                      const TextStyle(color: Colors.white),
+                  contentTextStyle: const TextStyle(color: Colors.white),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                floatingActionButtonTheme:
-                    FloatingActionButtonThemeData(
+                floatingActionButtonTheme: FloatingActionButtonThemeData(
                   backgroundColor: accentColor,
                   elevation: 2,
                 ),
                 textTheme: const TextTheme(
                   titleLarge: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w600),
-                  bodyMedium:
-                      TextStyle(fontSize: 14, color: Colors.black87),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  bodyMedium: TextStyle(fontSize: 14, color: Colors.black87),
                   bodySmall: TextStyle(color: Colors.grey),
                 ),
               ),
@@ -168,14 +165,12 @@ class MyApp extends StatelessWidget {
                 snackBarTheme: SnackBarThemeData(
                   behavior: SnackBarBehavior.floating,
                   backgroundColor: const Color(0xFF383838),
-                  contentTextStyle:
-                      const TextStyle(color: Colors.white),
+                  contentTextStyle: const TextStyle(color: Colors.white),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                floatingActionButtonTheme:
-                    FloatingActionButtonThemeData(
+                floatingActionButtonTheme: FloatingActionButtonThemeData(
                   backgroundColor: accentColor.withOpacity(0.85),
                   elevation: 2,
                 ),
@@ -189,11 +184,11 @@ class MyApp extends StatelessWidget {
                 ),
                 textTheme: const TextTheme(
                   titleLarge: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white),
-                  bodyMedium:
-                      TextStyle(fontSize: 14, color: Colors.white70),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                  bodyMedium: TextStyle(fontSize: 14, color: Colors.white70),
                   bodySmall: TextStyle(color: Colors.grey),
                 ),
               ),
@@ -221,15 +216,11 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int currentIndex = 0;
 
-  final List<Widget> screens = const [
-    HomeScreen(),
-    CalendarScreen(),
-  ];
+  final List<Widget> screens = const [HomeScreen(), CalendarScreen()];
 
   void _toggleTheme() {
     final isDark = themeNotifier.value == ThemeMode.dark;
-    themeNotifier.value =
-        isDark ? ThemeMode.light : ThemeMode.dark;
+    themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
     Hive.box('settings').put('isDarkMode', !isDark);
   }
 
@@ -246,12 +237,9 @@ class _MainScreenState extends State<MainScreen> {
             actions: [
               // 🌙 Theme toggle
               IconButton(
-                tooltip:
-                    isDark ? "Switch to Light" : "Switch to Dark",
+                tooltip: isDark ? "Switch to Light" : "Switch to Dark",
                 icon: Icon(
-                  isDark
-                      ? Icons.light_mode_rounded
-                      : Icons.dark_mode_rounded,
+                  isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
                 ),
                 onPressed: _toggleTheme,
               ),
@@ -262,9 +250,7 @@ class _MainScreenState extends State<MainScreen> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const SettingsScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
                   );
                 },
               ),
@@ -278,13 +264,11 @@ class _MainScreenState extends State<MainScreen> {
             onDestinationSelected: (index) {
               setState(() => currentIndex = index);
             },
-            backgroundColor:
-                Theme.of(context).colorScheme.surface,
+            backgroundColor: Theme.of(context).colorScheme.surface,
             elevation: 2,
-            indicatorColor: Theme.of(context)
-                .colorScheme
-                .primary
-                .withOpacity(0.15),
+            indicatorColor: Theme.of(
+              context,
+            ).colorScheme.primary.withOpacity(0.15),
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.home_outlined),
