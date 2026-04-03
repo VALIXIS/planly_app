@@ -100,8 +100,6 @@ class NotificationService {
 
     // Accent color (fallback to violet)
     final accentColor = const Color(0xFF7C4DFF);
-    // Large icon (use a bell icon for notifications)
-    const largeIcon = DrawableResourceAndroidBitmap('ic_stat_notify_bell'); // You must add this icon to your android/app/src/main/res/drawable or mipmap folder
 
     final androidDetails = AndroidNotificationDetails(
       'planly_tasks',
@@ -111,7 +109,6 @@ class NotificationService {
       priority: Priority.high,
       playSound: true,
       color: accentColor,
-      largeIcon: largeIcon,
       styleInformation: BigTextStyleInformation(
         body +
           (task != null && task.category != null ? '\nCategory: ${task.category}' : '') +
