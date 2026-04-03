@@ -119,28 +119,36 @@ class _SplashScreenState extends State<SplashScreen>
     [Alignment.topCenter, Alignment.bottomCenter],
   ];
 
+  int _scaledChannel(double channel, double factor) =>
+      (channel * 255.0 * factor).round().clamp(0, 255);
+
+  int _mixWithWhite(double channel, double amount) {
+    final base = channel * 255.0;
+    return (base + (255.0 - base) * amount).round().clamp(0, 255);
+  }
+
   // Builds gradient using user's accent color
   List<Color> _buildGradient(Color accent) {
     // Darken the accent for the dark end of the gradient
     final dark = Color.fromARGB(
       255,
-      (accent.red * 0.15).round(),
-      (accent.green * 0.10).round(),
-      (accent.blue * 0.15).round(),
+      _scaledChannel(accent.r, 0.15),
+      _scaledChannel(accent.g, 0.10),
+      _scaledChannel(accent.b, 0.15),
     );
     final mid = Color.fromARGB(
       255,
-      (accent.red * 0.35).round(),
-      (accent.green * 0.25).round(),
-      (accent.blue * 0.40).round(),
+      _scaledChannel(accent.r, 0.35),
+      _scaledChannel(accent.g, 0.25),
+      _scaledChannel(accent.b, 0.40),
     );
     final light = Color.fromARGB(
       255,
-      (accent.red * 0.65).round(),
-      (accent.green * 0.50).round(),
-      (accent.blue * 0.70).round(),
+      _scaledChannel(accent.r, 0.65),
+      _scaledChannel(accent.g, 0.50),
+      _scaledChannel(accent.b, 0.70),
     );
-    return [dark, mid, light, accent.withOpacity(0.75)];
+    return [dark, mid, light, accent.withValues(alpha: 0.75)];
   }
 
   @override
@@ -161,8 +169,8 @@ class _SplashScreenState extends State<SplashScreen>
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
             transitionDuration: const Duration(milliseconds: 600),
-            pageBuilder: (_, __, ___) => widget.nextScreen,
-            transitionsBuilder: (_, animation, __, child) =>
+            pageBuilder: (_, _, _) => widget.nextScreen,
+            transitionsBuilder: (_, animation, _, child) =>
                 FadeTransition(opacity: animation, child: child),
           ),
         );
@@ -189,9 +197,9 @@ class _SplashScreenState extends State<SplashScreen>
     // Accent highlight — lighter tint for badges/dots
     final highlight = Color.fromARGB(
       255,
-      (accent.red + (255 - accent.red) * 0.5).round(),
-      (accent.green + (255 - accent.green) * 0.5).round(),
-      (accent.blue + (255 - accent.blue) * 0.5).round(),
+      _mixWithWhite(accent.r, 0.5),
+      _mixWithWhite(accent.g, 0.5),
+      _mixWithWhite(accent.b, 0.5),
     );
 
     return Scaffold(
@@ -218,7 +226,7 @@ class _SplashScreenState extends State<SplashScreen>
               width: 280, height: 280,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: glowColor.withOpacity(0.18),
+                color: glowColor.withValues(alpha: 0.18),
               ),
             ),
           ),
@@ -228,7 +236,7 @@ class _SplashScreenState extends State<SplashScreen>
               width: 320, height: 320,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: glowColor.withOpacity(0.12),
+                color: glowColor.withValues(alpha: 0.12),
               ),
             ),
           ),
@@ -238,7 +246,7 @@ class _SplashScreenState extends State<SplashScreen>
               width: 130, height: 130,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.04),
+                color: Colors.white.withValues(alpha: 0.04),
               ),
             ),
           ),
@@ -247,7 +255,7 @@ class _SplashScreenState extends State<SplashScreen>
           Positioned(
             top: size.height * 0.52, left: 0, right: 0,
             child: Container(height: 1,
-                color: Colors.white.withOpacity(0.05)),
+                color: Colors.white.withValues(alpha: 0.05)),
           ),
 
           // ── Main content ──────────────────────────────
@@ -272,10 +280,10 @@ class _SplashScreenState extends State<SplashScreen>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 5),
                               decoration: BoxDecoration(
-                                color: highlight.withOpacity(0.15),
+                                color: highlight.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: highlight.withOpacity(0.3),
+                                  color: highlight.withValues(alpha: 0.3),
                                   width: 1,
                                 ),
                               ),
@@ -306,7 +314,7 @@ class _SplashScreenState extends State<SplashScreen>
                               style: TextStyle(
                                 fontSize: 72,
                                 height: 0.8,
-                                color: Colors.white.withOpacity(0.12),
+                                color: Colors.white.withValues(alpha: 0.12),
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -331,7 +339,7 @@ class _SplashScreenState extends State<SplashScreen>
                             Container(
                               width: 36, height: 2.5,
                               decoration: BoxDecoration(
-                                color: highlight.withOpacity(0.6),
+                                color: highlight.withValues(alpha: 0.6),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
@@ -359,7 +367,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w400,
-                                  color: Colors.white.withOpacity(0.5),
+                                  color: Colors.white.withValues(alpha: 0.5),
                                   letterSpacing: 0.4,
                                 ),
                               ),
@@ -416,7 +424,7 @@ class _DotsLoaderState extends State<_DotsLoader>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (_, __) {
+      builder: (_, _) {
         return Row(
           children: List.generate(3, (i) {
             final phase = i / 3;
@@ -427,7 +435,7 @@ class _DotsLoaderState extends State<_DotsLoader>
               width: 5, height: 5,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: widget.accentColor.withOpacity(opacity),
+                color: widget.accentColor.withValues(alpha: opacity),
               ),
             );
           }),

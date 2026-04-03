@@ -13,6 +13,9 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
+  # Google Mobile Ads
+  google_mobile_ads: ^5.2.0
+
   # Local storage
   hive: ^2.2.3
   hive_flutter: ^1.1.0

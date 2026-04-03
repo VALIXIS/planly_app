@@ -104,7 +104,7 @@ class _FocusModeScreenState extends State<FocusModeScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.check_circle_outline,
-                      size: 72, color: primary.withOpacity(0.5)),
+                      size: 72, color: primary.withValues(alpha: 0.5)),
                   const SizedBox(height: 20),
                   Text(
                     "All done for today!",
@@ -182,10 +182,10 @@ class _FocusModeScreenState extends State<FocusModeScreen>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 5),
                       decoration: BoxDecoration(
-                        color: priorityColor.withOpacity(0.12),
+                        color: priorityColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: priorityColor.withOpacity(0.3),
+                          color: priorityColor.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Text(

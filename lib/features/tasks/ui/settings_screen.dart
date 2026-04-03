@@ -1,6 +1,13 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../../../main.dart' show themeNotifier, accentColorNotifier;
+
+import '../../../main.dart' show accentColorNotifier, themeNotifier;
+import '../../../services/admob_service.dart';
+import '../../../services/notification_service.dart';
+import '../models/task_model.dart';
+import 'feedback_screen.dart';
+import 'privacy_policy_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -10,491 +17,540 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-
-  // ── 20 aesthetic, muted-but-rich accent colors ──
   final List<Map<String, dynamic>> _colors = [
-    // Purples & Violets
-    {"label": "Violet",    "color": const Color(0xFF7C4DFF)},
-    {"label": "Lavender",  "color": const Color(0xFF9575CD)},
-    {"label": "Mauve",     "color": const Color(0xFF8D6E9F)},
-    // Blues
-    {"label": "Indigo",    "color": const Color(0xFF3D5AFE)},
-    {"label": "Ocean",     "color": const Color(0xFF1565C0)},
-    {"label": "Steel",     "color": const Color(0xFF455A64)},
-    {"label": "Sky",       "color": const Color(0xFF0288D1)},
-    // Teals & Greens
-    {"label": "Teal",      "color": const Color(0xFF00695C)},
-    {"label": "Sage",      "color": const Color(0xFF558B6E)},
-    {"label": "Forest",    "color": const Color(0xFF2E7D32)},
-    // Warm tones
-    {"label": "Amber",     "color": const Color(0xFFE65100)},
-    {"label": "Sienna",    "color": const Color(0xFF8D5524)},
-    {"label": "Rose",      "color": const Color(0xFFC2185B)},
-    {"label": "Coral",     "color": const Color(0xFFD84315)},
-    // Neutrals & Slates
-    {"label": "Slate",     "color": const Color(0xFF37474F)},
-    {"label": "Graphite",  "color": const Color(0xFF424242)},
-    {"label": "Plum",      "color": const Color(0xFF6A1B4D)},
-    {"label": "Burgundy",  "color": const Color(0xFF7B1C1C)},
-    {"label": "Navy",      "color": const Color(0xFF1A237E)},
-    {"label": "Midnight",  "color": const Color(0xFF1C1C3A)},
+    {'label': 'Violet', 'color': const Color(0xFF7C4DFF)},
+    {'label': 'Lavender', 'color': const Color(0xFF9575CD)},
+    {'label': 'Indigo', 'color': const Color(0xFF3D5AFE)},
+    {'label': 'Ocean', 'color': const Color(0xFF1565C0)},
+    {'label': 'Teal', 'color': const Color(0xFF00695C)},
+    {'label': 'Forest', 'color': const Color(0xFF2E7D32)},
+    {'label': 'Amber', 'color': const Color(0xFFE65100)},
+    {'label': 'Rose', 'color': const Color(0xFFC2185B)},
+    {'label': 'Coral', 'color': const Color(0xFFD84315)},
+    {'label': 'Slate', 'color': const Color(0xFF37474F)},
+    {'label': 'Navy', 'color': const Color(0xFF1A237E)},
+    {'label': 'Midnight', 'color': const Color(0xFF1C1C3A)},
   ];
 
-  // ── Load settings from Hive ─────────────────────
+  BannerAd? _bannerAd;
+  bool _isBannerLoaded = false;
+
+  Box<dynamic> get _settings => Hive.box('settings');
+
   bool get _showSplashQuote =>
-      Hive.box('settings').get('showSplashQuote', defaultValue: true) as bool;
+      _settings.get('showSplashQuote', defaultValue: true) as bool;
 
   bool get _showHomeQuote =>
-      Hive.box('settings').get('showHomeQuote', defaultValue: true) as bool;
+      _settings.get('showHomeQuote', defaultValue: true) as bool;
 
   String get _selectedLanguage =>
-      Hive.box('settings').get('language', defaultValue: 'English') as String;
+      _settings.get('language', defaultValue: 'English') as String;
+
+  Color get _selectedAccentColor =>
+      Color(_settings.get('accentColor', defaultValue: 0xFF7C4DFF) as int);
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (!AdMobService.isSupportedPlatform) return;
+
+    _bannerAd = BannerAd(
+      adUnitId: AdMobService.bannerTestAdUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (_) {
+          if (mounted) setState(() => _isBannerLoaded = true);
+        },
+        onAdFailedToLoad: (ad, _) {
+          ad.dispose();
+          if (mounted) setState(() => _isBannerLoaded = false);
+        },
+      ),
+    )..load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
 
   void _saveSetting(String key, dynamic value) {
-    Hive.box('settings').put(key, value);
-    setState(() {});
+    _settings.put(key, value);
+    if (mounted) setState(() {});
+  }
+
+  void _setAccentColor(Color color) {
+    accentColorNotifier.value = color;
+    _saveSetting('accentColor', color.toARGB32());
+  }
+
+  Future<void> _confirmClearAllTasks() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All Tasks'),
+        content: const Text(
+          'This will permanently delete all tasks and reminders. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final taskBox = Hive.box<Task>('tasks');
+    await taskBox.clear();
+    await NotificationService().cancelAll();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('All tasks cleared')));
+  }
+
+  Widget _sectionTitle(String title, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+          color: isDark ? Colors.white54 : Colors.black54,
+        ),
+      ),
+    );
+  }
+
+  Widget _card({required bool isDark, required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.06),
+          width: 1,
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: child,
+    );
+  }
+
+  Widget _settingsHeader(bool isDark, Color primary) {
+    final titleColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.white70 : Colors.black54;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            primary.withValues(alpha: isDark ? 0.28 : 0.14),
+            primary.withValues(alpha: isDark ? 0.12 : 0.06),
+          ],
+        ),
+        border: Border.all(
+          color: primary.withValues(alpha: isDark ? 0.38 : 0.22),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: primary.withValues(alpha: isDark ? 0.26 : 0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.tune_rounded, color: primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Customize Planly',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: titleColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Theme, colors, quotes, privacy and data controls',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: subtitleColor,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _colorPalette(bool isDark, Color primary) {
+    final selected = _selectedAccentColor.toARGB32();
+    final labelColor = isDark ? Colors.white54 : Colors.black54;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Accent Color',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Pick a color that fits your workflow mood.',
+          style: TextStyle(fontSize: 12, color: labelColor),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: _colors.map((entry) {
+            final color = entry['color'] as Color;
+            final label = entry['label'] as String;
+            final isSelected = color.toARGB32() == selected;
+
+            return GestureDetector(
+              onTap: () => _setAccentColor(color),
+              child: SizedBox(
+                width: 66,
+                child: Column(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color,
+                        border: Border.all(
+                          color: isSelected
+                              ? (isDark ? Colors.white : Colors.black87)
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: color.withValues(alpha: 0.45),
+                                  blurRadius: 10,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: isSelected
+                          ? const Icon(Icons.check, size: 15, color: Colors.white)
+                          : null,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: labelColor,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final selectedColor = accentColorNotifier.value;
-    final subtitleColor = isDark ? Colors.white38 : Colors.black38;
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final iconColor = isDark ? Colors.white60 : Colors.black54;
+    final subtitleColor = isDark ? Colors.white54 : Colors.black54;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text("Settings")),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      appBar: AppBar(title: const Text('Settings')),
+      body: Column(
         children: [
-
-          // ══════════════════════════════════════════
-          // APPEARANCE
-          // ══════════════════════════════════════════
-          _sectionHeader("Appearance", isDark),
-          const SizedBox(height: 10),
-
-          // Dark mode toggle
-          _SettingsTile(
-            cardColor: cardColor,
-            child: ValueListenableBuilder<ThemeMode>(
-              valueListenable: themeNotifier,
-              builder: (context, mode, _) {
-                return _SwitchRow(
-                  icon: Icons.dark_mode_outlined,
-                  label: "Dark Mode",
-                  iconColor: iconColor,
-                  textColor: textColor,
-                  value: mode == ThemeMode.dark,
-                  activeColor: primary,
-                  onChanged: (val) {
-                    themeNotifier.value =
-                        val ? ThemeMode.dark : ThemeMode.light;
-                    Hive.box('settings').put('isDarkMode', val);
-                  },
-                );
-              },
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // ══════════════════════════════════════════
-          // ACCENT COLOR
-          // ══════════════════════════════════════════
-          _sectionHeader("Accent Color", isDark),
-          const SizedBox(height: 10),
-
-          _SettingsTile(
-            cardColor: cardColor,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
               children: [
-                Text(
-                  "Choose your app color",
-                  style: TextStyle(fontSize: 13, color: subtitleColor),
+                _settingsHeader(isDark, primary),
+                const SizedBox(height: 20),
+
+                _sectionTitle('Appearance', isDark),
+                _card(
+                  isDark: isDark,
+                  child: ValueListenableBuilder<ThemeMode>(
+                    valueListenable: themeNotifier,
+                    builder: (context, mode, _) {
+                      return SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: Icon(
+                          Icons.dark_mode_outlined,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                        title: const Text('Dark Mode'),
+                        subtitle: Text(
+                          'Reduce eye strain in low-light environments',
+                          style: TextStyle(fontSize: 12, color: subtitleColor),
+                        ),
+                        value: mode == ThemeMode.dark,
+                        onChanged: (value) {
+                          themeNotifier.value =
+                              value ? ThemeMode.dark : ThemeMode.light;
+                          _saveSetting('isDarkMode', value);
+                        },
+                      );
+                    },
+                  ),
                 ),
+
                 const SizedBox(height: 16),
-                // Color grid — 5 per row
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 14,
-                  children: _colors.map((item) {
-                    final color = item["color"] as Color;
-                    final label = item["label"] as String;
-                    final isSelected = selectedColor.value == color.value;
-                    return GestureDetector(
-                      onTap: () {
-                        accentColorNotifier.value = color;
-                        Hive.box('settings').put('accentColor', color.value);
-                        setState(() {});
-                      },
-                      child: Column(
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isSelected
-                                    ? (isDark ? Colors.white : Colors.black87)
-                                    : Colors.transparent,
-                                width: 2.5,
-                              ),
-                              boxShadow: isSelected
-                                  ? [BoxShadow(
-                                      color: color.withOpacity(0.45),
-                                      blurRadius: 10,
-                                      spreadRadius: 1,
-                                    )]
-                                  : [],
-                            ),
-                            child: isSelected
-                                ? const Icon(Icons.check,
-                                    color: Colors.white, size: 18)
-                                : null,
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            label,
-                            style: TextStyle(
-                              fontSize: 9.5,
-                              color: subtitleColor,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // ══════════════════════════════════════════
-          // DISPLAY
-          // ══════════════════════════════════════════
-          _sectionHeader("Display", isDark),
-          const SizedBox(height: 10),
-
-          _SettingsTile(
-            cardColor: cardColor,
-            child: Column(
-              children: [
-                // Show quote on splash screen
-                _SwitchRow(
-                  icon: Icons.auto_awesome_outlined,
-                  label: "Quote on Launch Screen",
-                  subtitle: "Show motivational quote when app opens",
-                  iconColor: iconColor,
-                  textColor: textColor,
-                  subtitleColor: subtitleColor,
-                  value: _showSplashQuote,
-                  activeColor: primary,
-                  onChanged: (val) => _saveSetting('showSplashQuote', val),
-                ),
-                Divider(
-                  height: 1,
-                  color: isDark
-                      ? Colors.white.withOpacity(0.06)
-                      : Colors.black.withOpacity(0.06),
-                ),
-                // Show quote on home screen
-                _SwitchRow(
-                  icon: Icons.format_quote_rounded,
-                  label: "Quote on Home Screen",
-                  subtitle: "Show daily quote card on home",
-                  iconColor: iconColor,
-                  textColor: textColor,
-                  subtitleColor: subtitleColor,
-                  value: _showHomeQuote,
-                  activeColor: primary,
-                  onChanged: (val) => _saveSetting('showHomeQuote', val),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // ══════════════════════════════════════════
-          // LANGUAGE
-          // ══════════════════════════════════════════
-          _sectionHeader("Language", isDark),
-          const SizedBox(height: 10),
-
-          _SettingsTile(
-            cardColor: cardColor,
-            child: Row(
-              children: [
-                Icon(Icons.language_outlined, size: 20, color: iconColor),
-                const SizedBox(width: 12),
-                Expanded(
+                _sectionTitle('Personalization', isDark),
+                _card(isDark: isDark, child: _colorPalette(isDark, primary)),
+                const SizedBox(height: 10),
+                _card(
+                  isDark: isDark,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("App Language",
-                          style: TextStyle(fontSize: 15, color: textColor)),
-                      const SizedBox(height: 2),
-                      Text(
-                        "More languages coming soon",
-                        style: TextStyle(fontSize: 12, color: subtitleColor),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: Icon(
+                          Icons.auto_awesome_outlined,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                        title: const Text('Quote on Launch Screen'),
+                        subtitle: Text(
+                          'Show a motivational quote when the app opens',
+                          style:
+                              TextStyle(fontSize: 12, color: subtitleColor),
+                        ),
+                        value: _showSplashQuote,
+                        onChanged: (value) =>
+                            _saveSetting('showSplashQuote', value),
+                      ),
+                      Divider(
+                        height: 1,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.06),
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: Icon(
+                          Icons.format_quote_rounded,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                        title: const Text('Quote on Home Screen'),
+                        subtitle: Text(
+                          'Show a daily quote card on the home view',
+                          style:
+                              TextStyle(fontSize: 12, color: subtitleColor),
+                        ),
+                        value: _showHomeQuote,
+                        onChanged: (value) =>
+                            _saveSetting('showHomeQuote', value),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _selectedLanguage,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: primary,
+
+                const SizedBox(height: 16),
+                _sectionTitle('General', isDark),
+                _card(
+                  isDark: isDark,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Icons.language_outlined,
+                      color: isDark ? Colors.white70 : Colors.black54,
                     ),
+                    title: const Text('Language'),
+                    subtitle: Text(
+                      'More languages coming soon',
+                      style: TextStyle(fontSize: 12, color: subtitleColor),
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _selectedLanguage,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                _sectionTitle('Support', isDark),
+                _card(
+                  isDark: isDark,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          Icons.privacy_tip_outlined,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                        title: const Text('Privacy Policy'),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PrivacyPolicyScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      Divider(
+                        height: 1,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.06),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          Icons.feedback_outlined,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                        title: const Text('Send Feedback'),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const FeedbackScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                _sectionTitle('Danger Zone', isDark),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: isDark ? 0.16 : 0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.red.withValues(alpha: isDark ? 0.4 : 0.22),
+                      width: 1,
+                    ),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Clear All Tasks',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'This removes every task and scheduled reminder permanently.',
+                        style: TextStyle(fontSize: 12, color: subtitleColor),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: BorderSide(
+                            color: Colors.red.withValues(alpha: 0.45),
+                          ),
+                        ),
+                        onPressed: _confirmClearAllTasks,
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Delete All Tasks'),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-
-          const SizedBox(height: 20),
-
-          // ══════════════════════════════════════════
-          // DATA
-          // ══════════════════════════════════════════
-          _sectionHeader("Data", isDark),
-          const SizedBox(height: 10),
-
-          _SettingsTile(
-            cardColor: cardColor,
-            child: GestureDetector(
-              onTap: () => _confirmClearAll(context, isDark),
-              child: Row(
-                children: [
-                  Icon(Icons.delete_sweep_outlined,
-                      size: 20, color: Colors.red.shade400),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Clear All Tasks",
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Colors.red.shade400,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          "Permanently delete all tasks",
-                          style: TextStyle(
-                              fontSize: 12, color: subtitleColor),
-                        ),
-                      ],
-                    ),
+          if (_isBannerLoaded && _bannerAd != null)
+            Container(
+              padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.black.withValues(alpha: 0.06),
                   ),
-                  Icon(Icons.chevron_right,
-                      color: Colors.red.shade300, size: 20),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Support Planly',
+                    style: TextStyle(fontSize: 11, color: subtitleColor),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: _bannerAd!.size.width.toDouble(),
+                    height: _bannerAd!.size.height.toDouble(),
+                    child: AdWidget(ad: _bannerAd!),
+                  ),
                 ],
               ),
             ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // ══════════════════════════════════════════
-          // ABOUT
-          // ══════════════════════════════════════════
-          _sectionHeader("About", isDark),
-          const SizedBox(height: 10),
-
-          _SettingsTile(
-            cardColor: cardColor,
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: primary.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.task_alt_rounded,
-                      color: primary, size: 24),
-                ),
-                const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Planly",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: textColor,
-                        )),
-                    Text("Version 1.0.0",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: subtitleColor,
-                        )),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
-
-  // ── Clear all tasks confirmation dialog ─────────
-  void _confirmClearAll(BuildContext context, bool isDark) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-        title: const Text("Clear All Tasks"),
-        content: const Text(
-            "This will permanently delete all your tasks. This cannot be undone."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () async {
-              await Hive.box<dynamic>('tasks').clear();
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("All tasks cleared"),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              }
-            },
-            style: TextButton.styleFrom(
-                foregroundColor: Colors.red),
-            child: const Text("Clear All",
-                style: TextStyle(fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionHeader(String title, bool isDark) {
-    return Text(
-      title.toUpperCase(),
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-        color: isDark ? Colors.white38 : Colors.black38,
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// Reusable card wrapper
-// ─────────────────────────────────────────────
-class _SettingsTile extends StatelessWidget {
-  final Color cardColor;
-  final Widget child;
-  const _SettingsTile({required this.cardColor, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: child,
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// Reusable switch row
-// ─────────────────────────────────────────────
-class _SwitchRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String? subtitle;
-  final Color iconColor;
-  final Color textColor;
-  final Color? subtitleColor;
-  final bool value;
-  final Color activeColor;
-  final ValueChanged<bool> onChanged;
-
-  const _SwitchRow({
-    required this.icon,
-    required this.label,
-    this.subtitle,
-    required this.iconColor,
-    required this.textColor,
-    this.subtitleColor,
-    required this.value,
-    required this.activeColor,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: iconColor),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: TextStyle(fontSize: 15, color: textColor)),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(subtitle!,
-                      style: TextStyle(
-                          fontSize: 12, color: subtitleColor)),
-                ],
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            activeColor: activeColor,
-            onChanged: onChanged,
-          ),
         ],
       ),
     );

@@ -1,4 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:hive/hive.dart';
+import '../features/tasks/models/task_model.dart';
+import 'package:flutter/material.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 
@@ -13,6 +16,26 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
+  /// Snooze a notification by rescheduling it for [minutes] later
+  Future<void> snoozeNotification(int id, {int minutes = 5}) async {
+    await _plugin.zonedSchedule(
+      id,
+      '🔔 Snoozed Task',
+      'This is your snoozed reminder!',
+      tz.TZDateTime.now(tz.local).add(Duration(minutes: minutes)),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'planly_tasks',
+          'Task Reminders',
+          channelDescription: 'Reminders for your Planly tasks',
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
   /// Call once in main() before runApp()
   Future<void> init() async {
     // ✅ Initialize timezone database
@@ -24,7 +47,25 @@ class NotificationService {
 
     const initSettings = InitializationSettings(android: androidSettings);
 
-    await _plugin.initialize(initSettings);
+    await _plugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) async {
+        // Handle notification action buttons
+        if (response.actionId == 'snooze') {
+          final id = response.id ?? 0;
+          await NotificationService().snoozeNotification(id, minutes: 5);
+        } else if (response.actionId == 'done') {
+          final id = response.id ?? 0;
+          // Mark the corresponding task as done in Hive
+          final box = await Hive.openBox<Task>('tasks');
+          final task = box.get(id);
+          if (task != null && !task.isCompleted) {
+            task.isCompleted = true;
+            await task.save();
+          }
+        }
+      },
+    );
 
     // ✅ Request POST_NOTIFICATIONS permission on Android 13+
     await _plugin
@@ -47,25 +88,79 @@ class NotificationService {
     // Don't schedule notifications in the past — they'd fire immediately
     if (scheduledTime.isBefore(DateTime.now())) return;
 
-    const androidDetails = AndroidNotificationDetails(
-      'planly_tasks',       // Channel ID — must be unique per app
-      'Task Reminders',     // Channel name shown in Android settings
+    // Fetch the task for premium info
+    final box = await Hive.openBox<Task>('tasks');
+    final task = box.get(id);
+    String emoji = '🔔';
+    if (task != null) {
+      if (task.priority == 'High') emoji = '🔥';
+      else if (task.priority == 'Low') emoji = '🧊';
+      else emoji = '🔔';
+    }
+
+    // Accent color (fallback to violet)
+    final accentColor = const Color(0xFF7C4DFF);
+    // Large icon (use a bell icon for notifications)
+    const largeIcon = DrawableResourceAndroidBitmap('ic_stat_notify_bell'); // You must add this icon to your android/app/src/main/res/drawable or mipmap folder
+
+    final androidDetails = AndroidNotificationDetails(
+      'planly_tasks',
+      'Task Reminders',
       channelDescription: 'Reminders for your Planly tasks',
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
+      color: accentColor,
+      largeIcon: largeIcon,
+      styleInformation: BigTextStyleInformation(
+        body +
+          (task != null && task.category != null ? '\nCategory: ${task.category}' : '') +
+          (task != null && task.priority.isNotEmpty ? '\nPriority: ${task.priority}' : ''),
+        contentTitle: '$emoji $title',
+        summaryText: 'Don\'t forget your task!',
+      ),
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          'snooze',
+          'Snooze 5 min',
+          showsUserInterface: true,
+        ),
+        AndroidNotificationAction(
+          'done',
+          'Mark as Done',
+          showsUserInterface: true,
+        ),
+      ],
+      onlyAlertOnce: true,
     );
+  /// Snooze a notification by rescheduling it for [minutes] later
+  Future<void> snoozeNotification(int id, {int minutes = 5}) async {
+    await _plugin.zonedSchedule(
+      id,
+      '🔔 Snoozed Task',
+      'This is your snoozed reminder!',
+      tz.TZDateTime.now(tz.local).add(Duration(minutes: minutes)),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'planly_tasks',
+          'Task Reminders',
+          channelDescription: 'Reminders for your Planly tasks',
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
 
-    const details = NotificationDetails(android: androidDetails);
+    final details = NotificationDetails(android: androidDetails);
 
     await _plugin.zonedSchedule(
       id,
-      title,
+      '🔔 $title',
       body,
-      // Convert DateTime to timezone-aware TZDateTime
       tz.TZDateTime.from(scheduledTime, tz.local),
       details,
-      // ✅ Fires even when device is in low-power mode
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,

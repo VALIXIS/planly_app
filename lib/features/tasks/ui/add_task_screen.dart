@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
-import '../models/task_model.dart';
+
 import '../../../services/notification_service.dart';
+import '../models/task_model.dart';
 
 class AddTaskScreen extends StatefulWidget {
   final Task? task;
@@ -14,35 +15,78 @@ class AddTaskScreen extends StatefulWidget {
 }
 
 class _AddTaskScreenState extends State<AddTaskScreen> {
+    TimeOfDay? reminderTime;
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _controller = TextEditingController();
   final TextEditingController _descController = TextEditingController();
+  final TextEditingController _reminderMinutesController =
+      TextEditingController();
 
   DateTime selectedDate = DateTime.now();
   TimeOfDay selectedTime = TimeOfDay.now();
 
   bool enableReminder = true;
+  bool _isSaving = false;
+  bool _showValidationErrors = false;
 
-  String selectedCategory = "Personal";
-  String selectedPriority = "Medium";
+  String selectedCategory = 'Personal';
+  String selectedPriority = 'Medium';
 
-  final List<String> categories = ["Work", "Personal", "Shopping", "Others"];
-  final List<String> priorities = ["High", "Medium", "Low"];
+  String repeatType = 'None';
+  final Set<int> repeatWeekdays = <int>{};
+
+  // Removed reminderTime; only using remind before
+  int? reminderMinutesBefore;
+
+  final List<String> categories = ['Work', 'Personal', 'Shopping', 'Others'];
+  final List<String> priorities = ['High', 'Medium', 'Low'];
+  final List<String> repeatOptions = ['None', 'Daily', 'Certain days'];
+  final List<int> quickReminderOffsets = [5, 10, 30, 60];
+
+  static const List<Map<String, dynamic>> weekDays = [
+    {'label': 'Mon', 'value': 1},
+    {'label': 'Tue', 'value': 2},
+    {'label': 'Wed', 'value': 3},
+    {'label': 'Thu', 'value': 4},
+    {'label': 'Fri', 'value': 5},
+    {'label': 'Sat', 'value': 6},
+    {'label': 'Sun', 'value': 7},
+  ];
 
   @override
   void initState() {
     super.initState();
 
+    final defaultDue = DateTime.now().add(const Duration(minutes: 15));
+    selectedDate = DateTime(defaultDue.year, defaultDue.month, defaultDue.day);
+    selectedTime = TimeOfDay(
+      hour: defaultDue.hour,
+      minute: defaultDue.minute,
+    );
+
     if (widget.task != null) {
       final task = widget.task!;
       _controller.text = task.title;
-      selectedCategory = task.category ?? "Personal";
-      _descController.text = task.description ?? "";
+      selectedCategory = task.category ?? 'Personal';
+      _descController.text = task.description ?? '';
       selectedPriority = task.priority;
 
       if (task.dueDate != null) {
         selectedDate = task.dueDate!;
         selectedTime = TimeOfDay.fromDateTime(task.dueDate!);
       }
+
+      reminderMinutesBefore = task.reminderMinutesBefore;
+      reminderTime = task.reminderTime != null
+          ? TimeOfDay.fromDateTime(task.reminderTime!)
+          : null;
+      enableReminder = task.reminderEnabled;
+
+      if (reminderMinutesBefore != null && reminderMinutesBefore! > 0) {
+        _reminderMinutesController.text = reminderMinutesBefore.toString();
+      }
+
+      _applyRecurrenceRule(task.recurrenceRule);
     }
   }
 
@@ -50,25 +94,133 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   void dispose() {
     _controller.dispose();
     _descController.dispose();
+    _reminderMinutesController.dispose();
     super.dispose();
   }
 
-  void pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
-    );
-    if (picked != null) setState(() => selectedDate = picked);
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: selectedTime,
-    );
-    if (picked != null) setState(() => selectedTime = picked);
+  DateTime _dateOnly(DateTime dateTime) {
+    return DateTime(dateTime.year, dateTime.month, dateTime.day);
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  DateTime _nextWeekendDate(DateTime from) {
+    var candidate = _dateOnly(from);
+    while (candidate.weekday != DateTime.saturday) {
+      candidate = candidate.add(const Duration(days: 1));
+    }
+    return candidate;
+  }
+
+  void _applyQuickDate(DateTime date) {
+    setState(() {
+      selectedDate = _dateOnly(date);
+    });
+  }
+
+  void _setReminderMinutes(int? minutes) {
+    final text = minutes?.toString() ?? '';
+
+    setState(() {
+      reminderMinutesBefore = minutes;
+      _reminderMinutesController.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    });
+  }
+
+  void _handleReminderMinutesChanged(String value) {
+    setState(() {
+      reminderMinutesBefore = int.tryParse(value.trim());
+    });
+  }
+
+  String? _validateTitle(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Task title is required';
+    }
+
+    if (value.trim().length < 2) {
+      return 'Title is too short';
+    }
+
+    return null;
+  }
+
+  String? _validateReminderMinutes(String? value) {
+    if (!enableReminder) return null;
+
+    final raw = value?.trim() ?? '';
+    if (raw.isEmpty) return null;
+
+    final parsed = int.tryParse(raw);
+    if (parsed == null) {
+      return 'Enter a valid number';
+    }
+
+    if (parsed <= 0) {
+      return 'Minutes must be greater than 0';
+    }
+
+    if (parsed > 10080) {
+      return 'Use 10080 minutes or less';
+    }
+
+    return null;
+  }
+
+  void _applyRecurrenceRule(String? rule) {
+    if (rule == null || rule.isEmpty) {
+      repeatType = 'None';
+      repeatWeekdays.clear();
+      return;
+    }
+
+    final normalized = rule.toLowerCase();
+
+    if (normalized == 'daily') {
+      repeatType = 'Daily';
+      repeatWeekdays.clear();
+      return;
+    }
+
+    if (normalized.startsWith('days:')) {
+      repeatType = 'Certain days';
+      final rawDays = normalized.substring(5).split(',');
+      repeatWeekdays
+        ..clear()
+        ..addAll(
+          rawDays
+              .map((d) => int.tryParse(d.trim()))
+              .whereType<int>()
+              .where((d) => d >= 1 && d <= 7),
+        );
+      return;
+    }
+
+    repeatType = 'None';
+    repeatWeekdays.clear();
+  }
+
+  String? _buildRecurrenceRule() {
+    if (repeatType == 'Daily') return 'daily';
+
+    if (repeatType == 'Certain days' && repeatWeekdays.isNotEmpty) {
+      final sorted = repeatWeekdays.toList()..sort();
+      return 'days:${sorted.join(',')}';
+    }
+
+    return null;
   }
 
   DateTime get combinedDateTime => DateTime(
@@ -79,38 +231,111 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         selectedTime.minute,
       );
 
-  void saveTask() async {
+  // Removed _buildReminderTimeValue; reminder will use scheduled date/time only
+
+  DateTime? _buildReminderScheduleTime() {
+    if (!enableReminder) return null;
+    DateTime target = combinedDateTime;
+    if (reminderMinutesBefore != null && reminderMinutesBefore! > 0) {
+      target = target.subtract(Duration(minutes: reminderMinutesBefore!));
+    }
+    if (!target.isAfter(DateTime.now())) return null;
+    return target;
+  }
+
+  Future<void> pickDate() async {
+    final nowDate = _dateOnly(DateTime.now());
+    final initialDate = selectedDate.isBefore(nowDate) ? nowDate : selectedDate;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: nowDate,
+      lastDate: DateTime(2035),
+    );
+
+    if (picked != null) {
+      setState(() => selectedDate = picked);
+    }
+  }
+
+  Future<void> pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: selectedTime,
+    );
+
+    if (picked != null) {
+      setState(() => selectedTime = picked);
+    }
+  }
+
+  Future<void> saveTask() async {
+    if (_isSaving) return;
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _showValidationErrors = true;
+    });
+
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
     final title = _controller.text.trim();
-    if (title.isEmpty) return;
+
+    if (repeatType == 'Certain days' && repeatWeekdays.isEmpty) {
+      _showMessage('Select at least one repeat day');
+      return;
+    }
+
+    final reminderAt = enableReminder ? _buildReminderScheduleTime() : null;
+    if (enableReminder && reminderAt == null) {
+      _showMessage(
+        'Reminder is in the past. Pick a future reminder or disable reminders.',
+      );
+      return;
+    }
 
     final notifService = NotificationService();
     final box = Hive.box<Task>('tasks');
+    final recurrenceRule = _buildRecurrenceRule();
 
-    if (widget.task != null) {
-      final task = widget.task!;
+    setState(() {
+      _isSaving = true;
+    });
 
-      await notifService.cancelNotification(task.key as int);
+    try {
+      if (widget.task != null) {
+        final task = widget.task!;
+        await notifService.cancelNotification(task.key as int);
 
-      task.title = title;
-      task.category = selectedCategory;
-      task.dueDate = combinedDateTime;
-      task.description = _descController.text.trim();
-      task.priority = selectedPriority;
-      await task.save();
+        task.title = title;
+        task.category = selectedCategory;
+        task.dueDate = combinedDateTime;
+        task.description = _descController.text.trim();
+        task.priority = selectedPriority;
+        task.recurrenceRule = recurrenceRule;
+        task.reminderEnabled = enableReminder;
+        task.reminderTime = null;
+        task.reminderMinutesBefore = enableReminder ? reminderMinutesBefore : null;
+        await task.save();
 
-      if (enableReminder) {
-        await notifService.scheduleNotification(
-          id: task.key as int,
-          title: task.title,
-          body: task.description?.isNotEmpty == true
-              ? task.description!
-              : 'Your task is due now!',
-          scheduledTime: combinedDateTime,
-        );
+        if (enableReminder && reminderAt != null) {
+          await notifService.scheduleNotification(
+            id: task.key as int,
+            title: task.title,
+            body: task.description?.isNotEmpty == true
+                ? task.description!
+                : 'Your task is due now!',
+            scheduledTime: reminderAt,
+          );
+        }
+
+        if (mounted) Navigator.pop(context);
+        return;
       }
 
-      if (mounted) Navigator.pop(context);
-    } else {
       final newTask = Task(
         title: title,
         category: selectedCategory,
@@ -118,29 +343,57 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         isCompleted: false,
         description: _descController.text.trim(),
         priority: selectedPriority,
+        recurrenceRule: recurrenceRule,
+        reminderEnabled: enableReminder,
+        reminderTime: null,
+        reminderMinutesBefore: enableReminder ? reminderMinutesBefore : null,
       );
 
       final key = await box.add(newTask);
 
-      if (enableReminder) {
+      if (enableReminder && reminderAt != null) {
         await notifService.scheduleNotification(
           id: key,
           title: title,
           body: _descController.text.trim().isNotEmpty
               ? _descController.text.trim()
               : 'Your task is due now!',
-          scheduledTime: combinedDateTime,
+          scheduledTime: reminderAt,
         );
       }
 
       if (mounted) Navigator.pop(context);
+    } catch (e, stack) {
+      debugPrint('Task save error: \n$e\n$stack');
+      _showMessage('Could not save task. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.task != null;
+    final theme = Theme.of(context);
     final colorScheme = Theme.of(context).colorScheme;
+    final nowDate = _dateOnly(DateTime.now());
+    final tomorrowDate = nowDate.add(const Duration(days: 1));
+    final weekendDate = _nextWeekendDate(nowDate);
+    final dueLabel = DateFormat('EEE, dd MMM yyyy - hh:mm a').format(
+      combinedDateTime,
+    );
+
+    final reminderPreview = _buildReminderScheduleTime();
+    final reminderPreviewValid = !enableReminder || reminderPreview != null;
+    final reminderPreviewText = !enableReminder
+        ? 'Reminder is turned off for this task.'
+        : reminderPreview != null
+            ? 'Will remind on ${DateFormat('EEE, dd MMM - hh:mm a').format(reminderPreview)}'
+            : 'Reminder falls in the past. Pick a future reminder.';
 
     final fieldFill = Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFF2A2A2A)
@@ -152,8 +405,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         prefixIcon: prefix,
         filled: true,
         fillColor: fieldFill,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -165,152 +417,492 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(isEditing ? "Edit Task" : "Add Task"),
+        title: Text(isEditing ? 'Edit Task' : 'Add Task'),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: _showValidationErrors
+                      ? AutovalidateMode.onUserInteraction
+                      : AutovalidateMode.disabled,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              colorScheme.primary.withValues(alpha: 0.16),
+                              colorScheme.tertiary.withValues(alpha: 0.12),
+                            ],
+                          ),
+                          border: Border.all(
+                            color: colorScheme.primary.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isEditing
+                                  ? 'Refine your task details'
+                                  : 'Plan your next task',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Due: $dueLabel',
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              enableReminder
+                                  ? 'Reminder is enabled'
+                                  : 'Reminder is currently off',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _SectionCard(
+                        title: 'Task Details',
+                        icon: Icons.edit_note,
+                        fillColor: fieldFill,
+                        child: Column(
+                          children: [
+                            TextFormField(
+                              controller: _controller,
+                              textInputAction: TextInputAction.next,
+                              validator: _validateTitle,
+                              decoration: fieldDecoration(
+                                hint: 'Enter task title',
+                                prefix: const Icon(Icons.task_alt),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _descController,
+                              maxLines: 3,
+                              decoration: fieldDecoration(
+                                hint: 'Add description (optional)',
+                                prefix: const Icon(Icons.notes),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _SectionCard(
+                        title: 'Schedule',
+                        icon: Icons.event,
+                        fillColor: fieldFill,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _InfoTile(
+                                    icon: Icons.calendar_today,
+                                    label: DateFormat('dd MMM yyyy').format(
+                                      selectedDate,
+                                    ),
+                                    onTap: pickDate,
+                                    fillColor: colorScheme.surface.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _InfoTile(
+                                    icon: Icons.access_time,
+                                    label: selectedTime.format(context),
+                                    onTap: pickTime,
+                                    fillColor: colorScheme.surface.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Quick Date',
+                              style: theme.textTheme.labelLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('Today'),
+                                  selected: _isSameDate(selectedDate, nowDate),
+                                  onSelected: (_) => _applyQuickDate(nowDate),
+                                ),
+                                ChoiceChip(
+                                  label: const Text('Tomorrow'),
+                                  selected: _isSameDate(
+                                    selectedDate,
+                                    tomorrowDate,
+                                  ),
+                                  onSelected: (_) =>
+                                      _applyQuickDate(tomorrowDate),
+                                ),
+                                ChoiceChip(
+                                  label: const Text('This Weekend'),
+                                  selected: _isSameDate(selectedDate, weekendDate),
+                                  onSelected: (_) => _applyQuickDate(weekendDate),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Text('Repeat', style: theme.textTheme.labelLarge),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: repeatOptions.map((option) {
+                                return ChoiceChip(
+                                  label: Text(option),
+                                  selected: repeatType == option,
+                                  onSelected: (_) {
+                                    setState(() {
+                                      repeatType = option;
+                                      if (repeatType != 'Certain days') {
+                                        repeatWeekdays.clear();
+                                      }
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            if (repeatType == 'Certain days') ...[
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: weekDays.map((day) {
+                                  final int dayValue = day['value'] as int;
+                                  final bool selected =
+                                      repeatWeekdays.contains(dayValue);
+                                  return FilterChip(
+                                    label: Text(day['label'] as String),
+                                    selected: selected,
+                                    onSelected: (isSelected) {
+                                      setState(() {
+                                        if (isSelected) {
+                                          repeatWeekdays.add(dayValue);
+                                        } else {
+                                          repeatWeekdays.remove(dayValue);
+                                        }
+                                      });
+                                    },
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _SectionCard(
+                        title: 'Reminder',
+                        icon: Icons.notifications_active_outlined,
+                        fillColor: fieldFill,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Enable reminder',
+                                  style: theme.textTheme.labelLarge,
+                                ),
+                                Switch.adaptive(
+                                  value: enableReminder,
+                                  activeThumbColor: colorScheme.primary,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      enableReminder = val;
+                                      if (!enableReminder) {
+                                        reminderTime = null;
+                                        reminderMinutesBefore = null;
+                                        _reminderMinutesController.clear();
+                                      }
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              child: enableReminder
+                                  ? Column(
+                                      key: const ValueKey<String>('reminderOn'),
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(height: 8),
+                                        TextFormField(
+                                          controller: _reminderMinutesController,
+                                          keyboardType: TextInputType.number,
+                                          validator: _validateReminderMinutes,
+                                          decoration: fieldDecoration(
+                                            hint: 'Remind before (minutes)',
+                                            prefix: const Icon(
+                                              Icons.timer_outlined,
+                                            ),
+                                          ),
+                                          onChanged: _handleReminderMinutesChanged,
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: quickReminderOffsets
+                                              .map((offset) => ChoiceChip(
+                                                    label: Text('${offset}m'),
+                                                    selected:
+                                                        reminderMinutesBefore ==
+                                                            offset,
+                                                    onSelected: (_) =>
+                                                        _setReminderMinutes(offset),
+                                                  ))
+                                              .toList(),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: reminderPreviewValid
+                                                ? colorScheme.primary
+                                                    .withValues(alpha: 0.08)
+                                                : colorScheme.error
+                                                    .withValues(alpha: 0.10),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                reminderPreviewValid
+                                                    ? Icons.info_outline
+                                                    : Icons.warning_amber_rounded,
+                                                size: 18,
+                                                color: reminderPreviewValid
+                                                    ? colorScheme.primary
+                                                    : colorScheme.error,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  reminderPreviewText,
+                                                  style: theme.textTheme.bodySmall,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _SectionCard(
+                        title: 'Category and Priority',
+                        icon: Icons.tune,
+                        fillColor: fieldFill,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Category', style: theme.textTheme.labelLarge),
+                            const SizedBox(height: 6),
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedCategory,
+                              decoration: fieldDecoration(
+                                hint: 'Category',
+                                prefix: const Icon(Icons.category_outlined),
+                              ),
+                              items: categories
+                                  .map(
+                                    (cat) => DropdownMenuItem<String>(
+                                      value: cat,
+                                      child: Text(cat),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => selectedCategory = val);
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            Text('Priority', style: theme.textTheme.labelLarge),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: priorities.map((priority) {
+                                return ChoiceChip(
+                                  label: Text(priority),
+                                  selected: selectedPriority == priority,
+                                  onSelected: (_) {
+                                    setState(() {
+                                      selectedPriority = priority;
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            border: Border(
+              top: BorderSide(
+                color: colorScheme.outline.withValues(alpha: 0.15),
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text("Task Details",
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _controller,
-                decoration:
-                    fieldDecoration(hint: "Enter task title..."),
-              ),
-              const SizedBox(height: 12),
-
-              TextField(
-                controller: _descController,
-                maxLines: 3,
-                decoration: fieldDecoration(
-                    hint: "Add description (optional)..."),
-              ),
-              const SizedBox(height: 20),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _InfoTile(
-                      icon: Icons.calendar_today,
-                      label:
-                          DateFormat('dd MMM yyyy').format(selectedDate),
-                      onTap: pickDate,
-                      fillColor: fieldFill,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _InfoTile(
-                      icon: Icons.access_time,
-                      label: selectedTime.format(context),
-                      onTap: pickTime,
-                      fillColor: fieldFill,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  color: fieldFill,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.notifications_outlined, size: 18),
-                        SizedBox(width: 10),
-                        Text("Remind me",
-                            style: TextStyle(fontSize: 14)),
-                      ],
-                    ),
-                    Switch(
-                      value: enableReminder,
-                      activeColor: colorScheme.primary,
-                      onChanged: (val) =>
-                          setState(() => enableReminder = val),
-                    ),
-                  ],
+              Text(
+                'Due: $dueLabel',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 20),
-
-              const Padding(
-                padding: EdgeInsets.only(left: 4, bottom: 6),
-                child: Text("Category",
-                    style:
-                        TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-              ),
-
-              DropdownButtonFormField<String>(
-                value: selectedCategory,
-                decoration: fieldDecoration(hint: "Category"),
-                items: categories.map((cat) {
-                  return DropdownMenuItem(
-                    value: cat,
-                    child: Text(cat),
-                  );
-                }).toList(),
-                onChanged: (val) =>
-                    setState(() => selectedCategory = val!),
-              ),
-              const SizedBox(height: 12),
-
-              const Padding(
-                padding: EdgeInsets.only(left: 4, bottom: 6),
-                child: Text("Priority",
-                    style:
-                        TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-              ),
-
-              DropdownButtonFormField<String>(
-                value: selectedPriority,
-                decoration: fieldDecoration(hint: "Priority"),
-                items: priorities.map((p) {
-                  return DropdownMenuItem(
-                    value: p,
-                    child: Text(p),
-                  );
-                }).toList(),
-                onChanged: (val) =>
-                    setState(() => selectedPriority = val!),
-              ),
-              const SizedBox(height: 30),
-
+              const SizedBox(height: 10),
               SizedBox(
-                width: double.infinity,
+                height: 52,
                 child: ElevatedButton(
-                  onPressed: saveTask,
+                  onPressed: _isSaving ? null : saveTask,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: Text(
-                    isEditing ? "Update Task" : "Save Task",
-                    style:
-                        const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  child: _isSaving
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  colorScheme.onPrimary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text('Saving...'),
+                          ],
+                        )
+                      : Text(
+                          isEditing ? 'Update Task' : 'Save Task',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                 ),
               ),
-              const SizedBox(height: 20),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget child;
+  final Color fillColor;
+
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+    required this.fillColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: fillColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
       ),
     );
   }
@@ -331,23 +923,23 @@ class _InfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: fillColor,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 16),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(label, style: const TextStyle(fontSize: 13)),
-            ),
-          ],
+    return Material(
+      color: fillColor,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(label, style: const TextStyle(fontSize: 13)),
+              ),
+            ],
+          ),
         ),
       ),
     );

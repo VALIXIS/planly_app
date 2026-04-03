@@ -11,15 +11,15 @@ android {
     compileSdk = 36
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
 
         // ✅ Fix 2: Required by flutter_local_notifications
         isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
 
     defaultConfig {
@@ -32,6 +32,14 @@ android {
 
     buildTypes {
         release {
+            // Keep release build stable for now; can re-enable after adding full keep rules.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            // Use the default ProGuard rules file
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("debug")
         }
     }

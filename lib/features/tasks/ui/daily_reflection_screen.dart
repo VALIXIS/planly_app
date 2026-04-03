@@ -64,25 +64,28 @@ class DailyReflectionScreen extends StatelessWidget {
     final percent = (pct * 100).round();
     final stateColor = _stateColor();
 
+    int scaledChannel(double channel, double factor) =>
+        (channel * 255.0 * factor).round().clamp(0, 255);
+
     // Build gradient using accent color — deep to lighter
     final darkEnd = Color.fromARGB(
       255,
-      (primary.red * 0.12).round(),
-      (primary.green * 0.08).round(),
-      (primary.blue * 0.12).round(),
+      scaledChannel(primary.r, 0.12),
+      scaledChannel(primary.g, 0.08),
+      scaledChannel(primary.b, 0.12),
     );
     final midPoint = Color.fromARGB(
       255,
-      (primary.red * 0.30).round(),
-      (primary.green * 0.22).round(),
-      (primary.blue * 0.35).round(),
+      scaledChannel(primary.r, 0.30),
+      scaledChannel(primary.g, 0.22),
+      scaledChannel(primary.b, 0.35),
     );
 
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [darkEnd, midPoint, primary.withOpacity(0.8)],
+            colors: [darkEnd, midPoint, primary.withValues(alpha: 0.8)],
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
             stops: const [0.0, 0.45, 1.0],
@@ -101,10 +104,10 @@ class DailyReflectionScreen extends StatelessWidget {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
+                    color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       width: 1,
                     ),
                   ),
@@ -113,7 +116,7 @@ class DailyReflectionScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.7),
+                      color: Colors.white.withValues(alpha: 0.7),
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -139,7 +142,7 @@ class DailyReflectionScreen extends StatelessWidget {
                   _subtitle(),
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.white.withOpacity(0.55),
+                    color: Colors.white.withValues(alpha: 0.55),
                     letterSpacing: 0.3,
                   ),
                 ),
@@ -160,14 +163,14 @@ class DailyReflectionScreen extends StatelessWidget {
                     _StatChip(
                       value: "$total",
                       label: "Total",
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.3),
                     ),
                     const SizedBox(width: 12),
                     // Percentage
                     _StatChip(
                       value: "$percent%",
                       label: "Done",
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.3),
                     ),
                   ],
                 ),
@@ -179,7 +182,7 @@ class DailyReflectionScreen extends StatelessWidget {
                   tween: Tween(begin: 0.0, end: pct),
                   duration: const Duration(milliseconds: 900),
                   curve: Curves.easeOutCubic,
-                  builder: (_, value, __) {
+                  builder: (_, value, _) {
                     return Column(
                       children: [
                         ClipRRect(
@@ -187,7 +190,7 @@ class DailyReflectionScreen extends StatelessWidget {
                           child: LinearProgressIndicator(
                             value: value,
                             minHeight: 6,
-                            backgroundColor: Colors.white.withOpacity(0.12),
+                            backgroundColor: Colors.white.withValues(alpha: 0.12),
                             color: stateColor,
                           ),
                         ),
@@ -206,7 +209,7 @@ class DailyReflectionScreen extends StatelessWidget {
                       width: 3,
                       height: 80,
                       decoration: BoxDecoration(
-                        color: stateColor.withOpacity(0.7),
+                        color: stateColor.withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -216,7 +219,7 @@ class DailyReflectionScreen extends StatelessWidget {
                         _message(),
                         style: TextStyle(
                           fontSize: 15,
-                          color: Colors.white.withOpacity(0.85),
+                          color: Colors.white.withValues(alpha: 0.85),
                           height: 1.65,
                           fontWeight: FontWeight.w300,
                         ),
@@ -259,7 +262,7 @@ class DailyReflectionScreen extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: onClose ?? () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                      side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -268,7 +271,7 @@ class DailyReflectionScreen extends StatelessWidget {
                     child: Text(
                       pct >= 1.0 ? "That's a wrap!" : "Close Day",
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
+                        color: Colors.white.withValues(alpha: 0.8),
                         fontWeight: FontWeight.w500,
                         fontSize: 15,
                       ),
@@ -303,9 +306,9 @@ class _StatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.25), width: 1),
+        border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
       ),
       child: Column(
         children: [
@@ -314,7 +317,7 @@ class _StatChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w800,
-              color: color == Colors.white.withOpacity(0.3)
+              color: color == Colors.white.withValues(alpha: 0.3)
                   ? Colors.white70
                   : color,
             ),
@@ -324,7 +327,7 @@ class _StatChip extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 10,
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.white.withValues(alpha: 0.5),
               fontWeight: FontWeight.w500,
             ),
           ),

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'features/tasks/ui/splash_screen.dart';
+import 'features/tasks/ui/onboarding_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'features/tasks/ui/home_screen.dart';
 import 'features/tasks/ui/calendar_screen.dart';
 import 'features/tasks/ui/settings_screen.dart';
 import 'features/tasks/models/task_model.dart';
 import 'services/notification_service.dart';
+import 'services/analytics_service.dart';
+import 'services/admob_service.dart';
 
 // 🌟 Global SnackBar key
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
@@ -40,11 +43,20 @@ void main() async {
       settings.get('accentColor', defaultValue: 0xFF7C4DFF) as int;
   accentColorNotifier.value = Color(savedColor);
 
+
   // 🔔 Init notifications
   await NotificationService().init();
 
+  // 📊 Init analytics
+  await AnalyticsService.init();
+  await AnalyticsService.logAppOpen();
+
+  // Ads SDK init
+  await AdMobService.initialize();
+
   runApp(const MyApp());
 }
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -78,12 +90,10 @@ class MyApp extends StatelessWidget {
                   brightness: Brightness.light,
                   primary: accentColor,
                   onPrimary: onPrimary,
-                  secondary: accentColor.withOpacity(0.6),
+                  secondary: accentColor.withValues(alpha: 0.6),
                   onSecondary: Colors.black,
                   error: Colors.red,
                   onError: Colors.white,
-                  background: const Color(0xFFF8F7FC),
-                  onBackground: Colors.black,
                   surface: Colors.white,
                   onSurface: Colors.black87,
                 ),
@@ -132,14 +142,12 @@ class MyApp extends StatelessWidget {
                 useMaterial3: true,
                 colorScheme: ColorScheme(
                   brightness: Brightness.dark,
-                  primary: accentColor.withOpacity(0.85),
+                  primary: accentColor.withValues(alpha: 0.85),
                   onPrimary: onPrimary,
-                  secondary: accentColor.withOpacity(0.5),
+                  secondary: accentColor.withValues(alpha: 0.5),
                   onSecondary: Colors.white,
                   error: Colors.redAccent,
                   onError: Colors.black,
-                  background: const Color(0xFF121212),
-                  onBackground: Colors.white,
                   surface: const Color(0xFF1E1E1E),
                   onSurface: Colors.white,
                 ),
@@ -171,7 +179,7 @@ class MyApp extends StatelessWidget {
                   ),
                 ),
                 floatingActionButtonTheme: FloatingActionButtonThemeData(
-                  backgroundColor: accentColor.withOpacity(0.85),
+                  backgroundColor: accentColor.withValues(alpha: 0.85),
                   elevation: 2,
                 ),
                 inputDecorationTheme: InputDecorationTheme(
@@ -193,8 +201,29 @@ class MyApp extends StatelessWidget {
                 ),
               ),
 
-              // ✅ Splash screen shows quote for 3s then fades to MainScreen
-              home: const SplashScreen(nextScreen: MainScreen()),
+              // ✅ App starts in onboarding once, then persists and enters splash/main
+              home: ValueListenableBuilder(
+                valueListenable: Hive.box('settings').listenable(
+                  keys: const ['onboardingDone'],
+                ),
+                builder: (context, _, _) {
+                  final onboardingDone =
+                      Hive.box('settings').get(
+                            'onboardingDone',
+                            defaultValue: false,
+                          ) as bool;
+
+                  if (!onboardingDone) {
+                    return OnboardingScreen(
+                      onFinish: () {
+                        Hive.box('settings').put('onboardingDone', true);
+                      },
+                    );
+                  }
+
+                  return const SplashScreen(nextScreen: MainScreen());
+                },
+              ),
             );
           },
         );
@@ -268,7 +297,7 @@ class _MainScreenState extends State<MainScreen> {
             elevation: 2,
             indicatorColor: Theme.of(
               context,
-            ).colorScheme.primary.withOpacity(0.15),
+            ).colorScheme.primary.withValues(alpha: 0.15),
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.home_outlined),
