@@ -6,9 +6,45 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT_DIR = ROOT / "docs" / "store_assets" / "phone_screenshots"
-SCREEN_SIZE = (1080, 1920)
-PHONE_FRAME = (256, 600, 824, 1828)
+
+OUTPUT_SPECS = [
+    {
+        "output_dir": ROOT / "docs" / "store_assets" / "phone_screenshots",
+        "canvas_size": (1080, 1920),
+        "device_frame": (256, 600, 824, 1828),
+        "border": 14,
+        "radius": 44,
+        "eyebrow_y": 90,
+        "title_y": 155,
+        "max_text_width": 920,
+        "bubble_row_y": 600,
+        "bubble_scale": 1.0,
+    },
+    {
+        "output_dir": ROOT / "docs" / "store_assets" / "tablet_7in_screenshots",
+        "canvas_size": (1200, 1920),
+        "device_frame": (322, 540, 878, 1816),
+        "border": 14,
+        "radius": 42,
+        "eyebrow_y": 82,
+        "title_y": 146,
+        "max_text_width": 980,
+        "bubble_row_y": 560,
+        "bubble_scale": 1.05,
+    },
+    {
+        "output_dir": ROOT / "docs" / "store_assets" / "tablet_10in_screenshots",
+        "canvas_size": (1600, 2560),
+        "device_frame": (440, 760, 1160, 2390),
+        "border": 18,
+        "radius": 52,
+        "eyebrow_y": 124,
+        "title_y": 210,
+        "max_text_width": 1260,
+        "bubble_row_y": 780,
+        "bubble_scale": 1.35,
+    },
+]
 
 PRIMARY = (124, 77, 255)
 INK = (24, 24, 27)
@@ -75,18 +111,13 @@ def load_font(size: int, *, bold: bool = False):
     return ImageFont.load_default()
 
 
-FONT_EYEBROW = load_font(22, bold=True)
-FONT_TITLE = load_font(56, bold=True)
-FONT_SUBTITLE = load_font(28)
-
-
 def mix(c1, c2, t: float):
     return tuple(round(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
 
 
-def draw_gradient_background(image: Image.Image) -> None:
+def draw_gradient_background(image: Image.Image, spec: dict[str, object]) -> None:
     draw = ImageDraw.Draw(image)
-    width, height = SCREEN_SIZE
+    width, height = image.size
     for y in range(height):
         t = y / (height - 1)
         left = mix((220, 250, 245), (238, 227, 255), t)
@@ -94,19 +125,25 @@ def draw_gradient_background(image: Image.Image) -> None:
         for x in range(width):
             draw.point((x, y), fill=mix(left, right, x / (width - 1)))
 
-    for x, y, r in [
-        (80, 590, 40),
-        (220, 620, 32),
-        (390, 610, 44),
-        (560, 585, 48),
-        (740, 600, 38),
-        (920, 615, 42),
+    bubble_y = spec["bubble_row_y"]
+    bubble_scale = spec["bubble_scale"]
+    for x_ratio, y_offset, r in [
+        (0.08, 0, 40),
+        (0.22, 30, 32),
+        (0.39, 20, 44),
+        (0.56, -5, 48),
+        (0.74, 10, 38),
+        (0.92, 25, 42),
     ]:
+        x = round(width * x_ratio)
+        y = round(bubble_y + y_offset * bubble_scale)
+        r = round(r * bubble_scale)
         draw.ellipse((x - r, y - r, x + r, y + r), fill=(255, 255, 255, 120))
 
 
 def draw_centered_wrapped_text(
     draw: ImageDraw.ImageDraw,
+    canvas_width: int,
     y: int,
     text: str,
     font: ImageFont.ImageFont,
@@ -126,7 +163,7 @@ def draw_centered_wrapped_text(
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
     draw.multiline_text(
-        ((SCREEN_SIZE[0] - text_width) / 2, y),
+        ((canvas_width - text_width) / 2, y),
         wrapped,
         font=font,
         fill=fill,
@@ -136,37 +173,51 @@ def draw_centered_wrapped_text(
     return y + text_height
 
 
-def draw_header(image: Image.Image, eyebrow: str, title: str, subtitle: str) -> None:
+def draw_header(
+    image: Image.Image,
+    spec: dict[str, object],
+    eyebrow: str,
+    title: str,
+    subtitle: str,
+) -> None:
     draw = ImageDraw.Draw(image)
-    eyebrow_box = draw.textbbox((0, 0), eyebrow.upper(), font=FONT_EYEBROW)
+    canvas_width, _ = image.size
+    eyebrow_font = load_font(round(canvas_width * 0.020), bold=True)
+    title_font = load_font(round(canvas_width * 0.052), bold=True)
+    subtitle_font = load_font(round(canvas_width * 0.026))
+
+    eyebrow_box = draw.textbbox((0, 0), eyebrow.upper(), font=eyebrow_font)
     eyebrow_width = eyebrow_box[2] - eyebrow_box[0]
     draw.text(
-        ((SCREEN_SIZE[0] - eyebrow_width) / 2, 90),
+        ((canvas_width - eyebrow_width) / 2, spec["eyebrow_y"]),
         eyebrow.upper(),
-        font=FONT_EYEBROW,
+        font=eyebrow_font,
         fill=PRIMARY,
     )
     title_bottom = draw_centered_wrapped_text(
         draw,
-        155,
+        canvas_width,
+        spec["title_y"],
         title,
-        FONT_TITLE,
+        title_font,
         INK,
-        900,
+        spec["max_text_width"],
         spacing=12,
     )
     draw_centered_wrapped_text(
         draw,
+        canvas_width,
         title_bottom + 24,
         subtitle,
-        FONT_SUBTITLE,
+        subtitle_font,
         MUTED,
-        920,
+        spec["max_text_width"],
         spacing=10,
     )
 
 
 def build_phone_layer(
+    spec: dict[str, object],
     source_path: Path,
     erase_rects: list[tuple[int, int, int, int]] | None = None,
 ) -> Image.Image:
@@ -176,10 +227,11 @@ def build_phone_layer(
         for rect in erase_rects:
             source_draw.rectangle(rect, fill=(247, 245, 252, 255))
 
-    frame_w = PHONE_FRAME[2] - PHONE_FRAME[0]
-    frame_h = PHONE_FRAME[3] - PHONE_FRAME[1]
-    border = 14
-    radius = 44
+    device_frame = spec["device_frame"]
+    frame_w = device_frame[2] - device_frame[0]
+    frame_h = device_frame[3] - device_frame[1]
+    border = spec["border"]
+    radius = spec["radius"]
 
     inner_size = (frame_w - border * 2, frame_h - border * 2)
     screenshot = ImageOps.fit(
@@ -214,42 +266,58 @@ def build_phone_layer(
 
 def paste_phone(
     canvas: Image.Image,
+    spec: dict[str, object],
     source_path: Path,
     erase_rects: list[tuple[int, int, int, int]] | None = None,
 ) -> None:
-    phone = build_phone_layer(source_path, erase_rects=erase_rects)
+    device_frame = spec["device_frame"]
+    phone = build_phone_layer(spec, source_path, erase_rects=erase_rects)
     shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     shadow_alpha = phone.getchannel("A").point(lambda value: round(value * 0.42))
     shadow_layer = Image.new("RGBA", phone.size, (49, 46, 129, 0))
     shadow_layer.putalpha(shadow_alpha)
-    shadow.paste(shadow_layer, (PHONE_FRAME[0], PHONE_FRAME[1] + 24), shadow_layer)
+    shadow.paste(
+        shadow_layer,
+        (device_frame[0], device_frame[1] + 24),
+        shadow_layer,
+    )
     shadow = shadow.filter(ImageFilter.GaussianBlur(32))
     canvas.alpha_composite(shadow)
-    canvas.alpha_composite(phone, dest=(PHONE_FRAME[0], PHONE_FRAME[1]))
+    canvas.alpha_composite(phone, dest=(device_frame[0], device_frame[1]))
 
 
-def render_scene(scene: dict[str, object]) -> None:
-    canvas = Image.new("RGBA", SCREEN_SIZE, WHITE)
-    draw_gradient_background(canvas)
+def render_scene(spec: dict[str, object], scene: dict[str, object]) -> None:
+    output_dir = spec["output_dir"]
+    canvas = Image.new("RGBA", spec["canvas_size"], WHITE)
+    draw_gradient_background(canvas, spec)
     draw_header(
         canvas,
+        spec,
         scene["eyebrow"],
         scene["title"],
         scene["subtitle"],
     )
-    paste_phone(canvas, scene["source"], erase_rects=scene.get("erase_rects"))
+    paste_phone(
+        canvas,
+        spec,
+        scene["source"],
+        erase_rects=scene.get("erase_rects"),
+    )
 
-    output_path = OUTPUT_DIR / scene["output"]
+    output_path = output_dir / scene["output"]
     canvas.convert("RGB").save(output_path, quality=95)
     print(f"wrote {output_path}")
 
 
 def main() -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    for spec in OUTPUT_SPECS:
+        spec["output_dir"].mkdir(parents=True, exist_ok=True)
+
     for scene in SCENES:
         if not scene["source"].exists():
             raise FileNotFoundError(f"Missing screenshot: {scene['source']}")
-        render_scene(scene)
+        for spec in OUTPUT_SPECS:
+            render_scene(spec, scene)
 
 
 if __name__ == "__main__":

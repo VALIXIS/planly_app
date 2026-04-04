@@ -10,7 +10,10 @@ class AdMobService {
   static const String _iosBannerTestAdUnitId =
       'ca-app-pub-3940256099942544/2934735716';
   static const String _androidBannerReleaseAdUnitId =
-      String.fromEnvironment('ANDROID_BANNER_AD_UNIT_ID');
+      String.fromEnvironment(
+        'ANDROID_BANNER_AD_UNIT_ID',
+        defaultValue: 'ca-app-pub-6059224677913709/7889542039',
+      );
   static const String _iosBannerReleaseAdUnitId =
       String.fromEnvironment('IOS_BANNER_AD_UNIT_ID');
 

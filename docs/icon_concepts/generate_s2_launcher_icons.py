@@ -65,6 +65,8 @@ WEB_MASKABLE_ICONS = {
     "web/icons/Icon-maskable-512.png": 512,
 }
 
+PLAY_STORE_ICON = "docs/store_assets/planly-play-store-icon-512.png"
+
 
 def lerp(start: int, end: int, t: float) -> int:
     return round(start + (end - start) * t)
@@ -245,6 +247,8 @@ def main() -> None:
     preview_path = ROOT / "docs/icon_concepts/planly-s2-app-icon-preview.png"
     rounded_icon(source, SOURCE_SIZE).save(preview_path)
     print(f"wrote {preview_path.relative_to(ROOT)} ({SOURCE_SIZE}x{SOURCE_SIZE})")
+
+    save_png(source, PLAY_STORE_ICON, 512, rounded=False)
 
     for relative_path, size in ANDROID_ICONS.items():
         save_png(source, relative_path, size, rounded=True)
