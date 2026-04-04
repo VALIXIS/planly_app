@@ -445,12 +445,19 @@ class _HomeScreenState extends State<HomeScreen>
     final box = Hive.box<Task>('tasks');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
+    final overlayStyle = (isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark)
+        .copyWith(statusBarColor: Colors.transparent);
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: ValueListenableBuilder(
-        valueListenable: box.listenable(),
-        builder: (context, Box<Task> box, _) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: SafeArea(
+          child: ValueListenableBuilder(
+            valueListenable: box.listenable(),
+            builder: (context, Box<Task> box, _) {
           // ...existing code...
               final allTasks = box.values.toList();
               final now = DateTime.now();
@@ -930,7 +937,8 @@ class _HomeScreenState extends State<HomeScreen>
               );
             },
           ),
-      floatingActionButton: _isSelectionMode
+        ),
+        floatingActionButton: _isSelectionMode
           ? null
           : FloatingActionButton(
               onPressed: () {
@@ -941,6 +949,7 @@ class _HomeScreenState extends State<HomeScreen>
               },
               child: const Icon(Icons.add),
             ),
+      ),
     );
   }
 

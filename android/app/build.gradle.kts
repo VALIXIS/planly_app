@@ -11,6 +11,12 @@ val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+val releaseAdMobAppId = (keystoreProperties["adMobAppId"] as String?)?.trim()
+val isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("Release", ignoreCase = true) ||
+        taskName.contains("bundle", ignoreCase = true)
+}
 
 android {
     namespace = "com.js.planly"
@@ -36,6 +42,9 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["adMobAppId"] =
+            releaseAdMobAppId?.takeIf { it.isNotEmpty() }
+                ?: "ca-app-pub-3940256099942544~3347511713"
     }
 
     signingConfigs {
@@ -59,7 +68,17 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (keystorePropertiesFile.exists()) {
+            if (!hasReleaseKeystore && isReleaseBuildRequested) {
+                throw GradleException(
+                    "Missing android/key.properties. Add release keystore details before building a Play Store bundle."
+                )
+            }
+            if (isReleaseBuildRequested && releaseAdMobAppId.isNullOrEmpty()) {
+                throw GradleException(
+                    "Missing adMobAppId in android/key.properties. Add your real AdMob app ID before building a release bundle."
+                )
+            }
+            signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")

@@ -56,9 +56,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool get _adsPersonalizationEnabled =>
       _settings.get('adsPersonalizationEnabled', defaultValue: false) as bool;
 
-  bool get _supportAdsEnabled =>
-      _settings.get('supportAdsEnabled', defaultValue: true) as bool;
-
   @override
   void initState() {
     super.initState();
@@ -70,7 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _bannerAd = null;
     _isBannerLoaded = false;
 
-    if (!AdMobService.isSupportedPlatform || !AdMobService.supportAdsEnabled) {
+    if (!AdMobService.isSupportedPlatform) {
       if (mounted) setState(() {});
       return;
     }
@@ -114,14 +111,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _setAdsPersonalizationEnabled(bool enabled) async {
     await AdMobService.setPersonalizedAdsEnabled(enabled);
-    if (mounted) {
-      setState(() {});
-      _loadBannerAd();
-    }
-  }
-
-  Future<void> _setSupportAdsEnabled(bool enabled) async {
-    await AdMobService.setSupportAdsEnabled(enabled);
     if (mounted) {
       setState(() {});
       _loadBannerAd();
@@ -509,29 +498,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           style: TextStyle(fontSize: 12, color: subtitleColor),
                         ),
                         value: _adsPersonalizationEnabled,
-                        onChanged: _supportAdsEnabled
-                            ? _setAdsPersonalizationEnabled
-                            : null,
-                      ),
-                      Divider(
-                        height: 1,
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.06)
-                            : Colors.black.withValues(alpha: 0.06),
-                      ),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        secondary: Icon(
-                          Icons.campaign_outlined,
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
-                        title: const Text('Support Ads'),
-                        subtitle: Text(
-                          'Keep off for a cleaner, smoother experience',
-                          style: TextStyle(fontSize: 12, color: subtitleColor),
-                        ),
-                        value: _supportAdsEnabled,
-                        onChanged: _setSupportAdsEnabled,
+                        onChanged: _setAdsPersonalizationEnabled,
                       ),
                     ],
                   ),
@@ -632,7 +599,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          if (_supportAdsEnabled && AdMobService.isSupportedPlatform)
+          if (AdMobService.isSupportedPlatform)
             Container(
               padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
               decoration: BoxDecoration(

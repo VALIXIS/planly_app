@@ -9,6 +9,10 @@ class AdMobService {
       'ca-app-pub-3940256099942544/6300978111';
   static const String _iosBannerTestAdUnitId =
       'ca-app-pub-3940256099942544/2934735716';
+  static const String _androidBannerReleaseAdUnitId =
+      String.fromEnvironment('ANDROID_BANNER_AD_UNIT_ID');
+  static const String _iosBannerReleaseAdUnitId =
+      String.fromEnvironment('IOS_BANNER_AD_UNIT_ID');
 
   static bool get isSupportedPlatform =>
       !kIsWeb &&
@@ -23,28 +27,41 @@ class AdMobService {
     ) as bool;
   }
 
-  static bool get supportAdsEnabled {
-    if (!Hive.isBoxOpen('settings')) return false;
-    return Hive.box('settings').get(
-      'supportAdsEnabled',
-      defaultValue: true,
-    ) as bool;
-  }
+  static bool get supportAdsEnabled => true;
 
   static String get bannerAdUnitId {
     switch (defaultTargetPlatform) {
       case TargetPlatform.iOS:
-        return const String.fromEnvironment(
-          'IOS_BANNER_AD_UNIT_ID',
-          defaultValue: _iosBannerTestAdUnitId,
+        return _resolveBannerAdUnitId(
+          releaseAdUnitId: _iosBannerReleaseAdUnitId,
+          testAdUnitId: _iosBannerTestAdUnitId,
+          platformLabel: 'IOS_BANNER_AD_UNIT_ID',
         );
       case TargetPlatform.android:
       default:
-        return const String.fromEnvironment(
-          'ANDROID_BANNER_AD_UNIT_ID',
-          defaultValue: _androidBannerTestAdUnitId,
+        return _resolveBannerAdUnitId(
+          releaseAdUnitId: _androidBannerReleaseAdUnitId,
+          testAdUnitId: _androidBannerTestAdUnitId,
+          platformLabel: 'ANDROID_BANNER_AD_UNIT_ID',
         );
     }
+  }
+
+  static String _resolveBannerAdUnitId({
+    required String releaseAdUnitId,
+    required String testAdUnitId,
+    required String platformLabel,
+  }) {
+    if (!kReleaseMode) return testAdUnitId;
+
+    final adUnitId = releaseAdUnitId.trim();
+    if (adUnitId.isEmpty || adUnitId.startsWith('ca-app-pub-3940256099942544/')) {
+      throw StateError(
+        'Missing real $platformLabel. Pass it with --dart-define when building the Play Store bundle.',
+      );
+    }
+
+    return adUnitId;
   }
 
   static AdRequest buildBannerRequest() {
@@ -54,12 +71,6 @@ class AdMobService {
   static Future<void> setPersonalizedAdsEnabled(bool enabled) async {
     if (Hive.isBoxOpen('settings')) {
       await Hive.box('settings').put('adsPersonalizationEnabled', enabled);
-    }
-  }
-
-  static Future<void> setSupportAdsEnabled(bool enabled) async {
-    if (Hive.isBoxOpen('settings')) {
-      await Hive.box('settings').put('supportAdsEnabled', enabled);
     }
   }
 

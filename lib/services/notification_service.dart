@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:hive/hive.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../features/tasks/models/task_model.dart';
+import 'analytics_service.dart';
 
 /// Handles scheduling, snoozing, and cancelling local task reminders.
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
+  static const String _notificationIcon = '@drawable/ic_planly_notification';
+  static const Duration _minimumScheduleDelay = Duration(seconds: 5);
 
   factory NotificationService() => _instance;
 
@@ -16,6 +20,7 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+  AndroidScheduleMode _scheduleMode = AndroidScheduleMode.exactAllowWhileIdle;
 
   Future<Box<Task>> _taskBox() async {
     if (Hive.isBoxOpen('tasks')) {
@@ -25,30 +30,50 @@ class NotificationService {
     return Hive.openBox<Task>('tasks');
   }
 
+  Future<void> _configureLocalTimezone() async {
+    tz.initializeTimeZones();
+
+    try {
+      final localTimezone = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(localTimezone.identifier));
+    } catch (error) {
+      tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+    }
+  }
+
+  tz.TZDateTime _scheduleAt(DateTime scheduledTime) {
+    final now = tz.TZDateTime.now(tz.local);
+    final requestedTime = tz.TZDateTime.from(scheduledTime, tz.local);
+    final minTime = now.add(_minimumScheduleDelay);
+
+    return requestedTime.isBefore(minTime) ? minTime : requestedTime;
+  }
+
   Future<void> snoozeNotification(int id, {int minutes = 5}) async {
     await _plugin.zonedSchedule(
       id,
       'Snoozed Task',
       'This is your snoozed reminder!',
-      tz.TZDateTime.now(tz.local).add(Duration(minutes: minutes)),
+      _scheduleAt(DateTime.now().add(Duration(minutes: minutes))),
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'planly_tasks',
           'Task Reminders',
           channelDescription: 'Reminders for your Planly tasks',
+          icon: _notificationIcon,
+          color: Color(0xFF6366F1),
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: _scheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
   Future<void> init() async {
-    tz.initializeTimeZones();
+    await _configureLocalTimezone();
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(_notificationIcon);
     const initSettings = InitializationSettings(android: androidSettings);
 
     await _plugin.initialize(
@@ -72,10 +97,21 @@ class NotificationService {
       },
     );
 
-    await _plugin
+    final androidPlugin = _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    await androidPlugin?.requestNotificationsPermission();
+
+    final canScheduleExactNotifications =
+        await androidPlugin?.canScheduleExactNotifications() ?? true;
+    if (!canScheduleExactNotifications) {
+      final exactPermissionGranted =
+          await androidPlugin?.requestExactAlarmsPermission() ?? false;
+      _scheduleMode = exactPermissionGranted
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+    }
   }
 
   Future<void> scheduleNotification({
@@ -84,8 +120,6 @@ class NotificationService {
     required String body,
     required DateTime scheduledTime,
   }) async {
-    if (scheduledTime.isBefore(DateTime.now())) return;
-
     final box = await _taskBox();
     final task = box.get(id);
     final heading = switch (task?.priority) {
@@ -102,10 +136,11 @@ class NotificationService {
       'planly_tasks',
       'Task Reminders',
       channelDescription: 'Reminders for your Planly tasks',
+      icon: _notificationIcon,
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
-      color: const Color(0xFF7C4DFF),
+      color: const Color(0xFF6366F1),
       styleInformation: BigTextStyleInformation(
         expandedBody,
         contentTitle: '$heading: $title',
@@ -126,15 +161,26 @@ class NotificationService {
       onlyAlertOnce: true,
     );
 
+    final resolvedScheduleTime = _scheduleAt(scheduledTime);
+
     await _plugin.zonedSchedule(
       id,
       title,
       body,
-      tz.TZDateTime.from(scheduledTime, tz.local),
+      resolvedScheduleTime,
       NotificationDetails(android: androidDetails),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: _scheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    await AnalyticsService.logEvent(
+      'notification_scheduled',
+      parameters: {
+        'task_id': id,
+        'scheduled_at': resolvedScheduleTime.toIso8601String(),
+        'schedule_mode': _scheduleMode.name,
+      },
     );
   }
 

@@ -24,7 +24,6 @@ Future<void> main() async {
 
   await NotificationService().init();
   await AnalyticsService.init();
-  await AnalyticsService.logAppOpen();
   await AdMobService.initialize();
 
   runApp(const MyApp());

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
@@ -93,13 +94,19 @@ class _CalendarScreenState extends State<CalendarScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
     final calendarHeight = MediaQuery.of(context).size.height * 0.42;
+    final overlayStyle = (isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark)
+        .copyWith(statusBarColor: Colors.transparent);
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Column(
-        children: [
-          Expanded(
-            child: SafeArea(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Column(
+          children: [
+            Expanded(
+              child: SafeArea(
               child: ValueListenableBuilder(
                 valueListenable: box.listenable(),
                 builder: (context, Box<Task> taskBox, _) {
@@ -229,16 +236,18 @@ class _CalendarScreenState extends State<CalendarScreen>
                 },
               ),
             ),
-          ),
-          if (AdMobService.supportAdsEnabled && AdMobService.isSupportedPlatform)
-            SizedBox(
-              width: AdSize.banner.width.toDouble(),
-              height: AdSize.banner.height.toDouble(),
-              child: _isBannerLoaded && _bannerAd != null
-                  ? AdWidget(ad: _bannerAd!)
-                  : const SizedBox.shrink(),
             ),
-        ],
+            if (AdMobService.supportAdsEnabled &&
+                AdMobService.isSupportedPlatform)
+              SizedBox(
+                width: AdSize.banner.width.toDouble(),
+                height: AdSize.banner.height.toDouble(),
+                child: _isBannerLoaded && _bannerAd != null
+                    ? AdWidget(ad: _bannerAd!)
+                    : const SizedBox.shrink(),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
+import '../../../services/analytics_service.dart';
 import '../../../services/notification_service.dart';
 import '../models/task_model.dart';
 
@@ -16,6 +17,7 @@ class AddTaskScreen extends StatefulWidget {
 
 class _AddTaskScreenState extends State<AddTaskScreen> {
     TimeOfDay? reminderTime;
+  static const Duration _minimumReminderDelay = Duration(seconds: 5);
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _controller = TextEditingController();
   final TextEditingController _descController = TextEditingController();
@@ -235,11 +237,15 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   DateTime? _buildReminderScheduleTime() {
     if (!enableReminder) return null;
+    final now = DateTime.now();
+    final earliestReminderTime = now.add(_minimumReminderDelay);
     DateTime target = combinedDateTime;
     if (reminderMinutesBefore != null && reminderMinutesBefore! > 0) {
       target = target.subtract(Duration(minutes: reminderMinutesBefore!));
     }
-    if (!target.isAfter(DateTime.now())) return null;
+    if (target.isBefore(earliestReminderTime)) {
+      return earliestReminderTime;
+    }
     return target;
   }
 
@@ -332,6 +338,17 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           );
         }
 
+        await AnalyticsService.logEvent(
+          'task_updated',
+          parameters: {
+            'task_id': task.key as int,
+            'category': selectedCategory,
+            'priority': selectedPriority,
+            'reminder_enabled': enableReminder,
+            'repeat_type': repeatType,
+          },
+        );
+
         if (mounted) Navigator.pop(context);
         return;
       }
@@ -350,6 +367,17 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       );
 
       final key = await box.add(newTask);
+
+      await AnalyticsService.logEvent(
+        'task_added',
+        parameters: {
+          'task_id': key,
+          'category': selectedCategory,
+          'priority': selectedPriority,
+          'reminder_enabled': enableReminder,
+          'repeat_type': repeatType,
+        },
+      );
 
       if (enableReminder && reminderAt != null) {
         await notifService.scheduleNotification(
@@ -388,12 +416,13 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     );
 
     final reminderPreview = _buildReminderScheduleTime();
-    final reminderPreviewValid = !enableReminder || reminderPreview != null;
     final reminderPreviewText = !enableReminder
         ? 'Reminder is turned off for this task.'
-        : reminderPreview != null
-            ? 'Will remind on ${DateFormat('EEE, dd MMM - hh:mm a').format(reminderPreview)}'
-            : 'Reminder falls in the past. Pick a future reminder.';
+        : reminderPreview != null &&
+            reminderPreview.difference(DateTime.now()) <=
+                const Duration(seconds: 10)
+            ? 'Reminder time already passed, so Planly will remind right after you save.'
+            : 'Will remind on ${DateFormat('EEE, dd MMM - hh:mm a').format(reminderPreview!)}';
 
     final fieldFill = Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFF2A2A2A)
@@ -692,24 +721,17 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                           width: double.infinity,
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
-                                            color: reminderPreviewValid
-                                                ? colorScheme.primary
-                                                    .withValues(alpha: 0.08)
-                                                : colorScheme.error
-                                                    .withValues(alpha: 0.10),
+                                            color: colorScheme.primary
+                                                .withValues(alpha: 0.08),
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                           ),
                                           child: Row(
                                             children: [
                                               Icon(
-                                                reminderPreviewValid
-                                                    ? Icons.info_outline
-                                                    : Icons.warning_amber_rounded,
+                                                Icons.info_outline,
                                                 size: 18,
-                                                color: reminderPreviewValid
-                                                    ? colorScheme.primary
-                                                    : colorScheme.error,
+                                                color: colorScheme.primary,
                                               ),
                                               const SizedBox(width: 8),
                                               Expanded(

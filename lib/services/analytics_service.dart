@@ -28,10 +28,6 @@ class AnalyticsService {
     }
   }
 
-  static Future<void> logAppOpen() async {
-    await logEvent('app_open');
-  }
-
   static Future<void> logEvent(
     String name, {
     Map<String, Object>? parameters,

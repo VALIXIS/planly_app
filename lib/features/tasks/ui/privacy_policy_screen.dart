@@ -37,7 +37,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
             SizedBox(height: 8),
             Text(
-              'Planly shows Google Mobile Ads on supported mobile platforms by default. You can disable Support Ads in Settings, and you can keep Personalized Ads off so ad requests are sent as non-personalized.',
+              'Planly shows Google Mobile Ads on supported mobile platforms. You can keep Personalized Ads off in Settings so ad requests are sent as non-personalized.',
               style: TextStyle(fontSize: 16, height: 1.4),
             ),
             SizedBox(height: 16),
