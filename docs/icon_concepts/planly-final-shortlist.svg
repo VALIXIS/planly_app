@@ -1,0 +1,76 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" rx="32" fill="#F5F7FB"/>
+
+  <text x="80" y="90" fill="#18181B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="42" font-weight="800">Planly Final Shortlist</text>
+  <text x="80" y="130" fill="#52525B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="500">S2 selected, B2 selected, and one merged B2 + S2 concept.</text>
+
+  <defs>
+    <linearGradient id="gS2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14B8A6"/>
+      <stop offset="0.45" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#A855F7"/>
+    </linearGradient>
+    <linearGradient id="gB2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10D4E8"/>
+      <stop offset="0.45" stop-color="#6E5BFF"/>
+      <stop offset="1" stop-color="#33D17A"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(170 160) rotate(48) scale(390 380)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="22" stdDeviation="24" flood-color="#312E81" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <g transform="translate(80 220)">
+    <rect width="440" height="560" rx="40" fill="white"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#gS2)"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#glow)"/>
+    <path d="M88 240L176 328L356 156" stroke="white" stroke-opacity="0.18" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+    <g filter="url(#shadow)">
+      <text x="220" y="272" text-anchor="middle" fill="#FFFFFF" font-family="Pacifico, Lobster, Brush Script MT, Segoe Script, cursive" font-size="132" font-weight="700" letter-spacing="1">Planly</text>
+    </g>
+    <text x="220" y="480" text-anchor="middle" fill="#18181B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800">S2 Selected</text>
+    <text x="220" y="512" text-anchor="middle" fill="#52525B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="500">Large premium cursive wordmark</text>
+  </g>
+
+  <g transform="translate(580 220)">
+    <rect width="440" height="560" rx="40" fill="white"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#gB2)"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#glow)"/>
+    <rect x="102" y="106" width="236" height="194" rx="36" fill="#FFFFFF" opacity="0.96"/>
+    <rect x="102" y="106" width="236" height="194" rx="36" stroke="white" stroke-width="10"/>
+    <rect x="102" y="106" width="236" height="74" rx="36" fill="white" opacity="0.98"/>
+    <path d="M115 180H325" stroke="#6E5BFF" stroke-width="12" stroke-linecap="round" opacity="0.22"/>
+    <rect x="136" y="72" width="28" height="72" rx="14" fill="white"/>
+    <rect x="276" y="72" width="28" height="72" rx="14" fill="white"/>
+    <rect x="136" y="208" width="26" height="26" rx="8" fill="#C4B5FD"/>
+    <rect x="176" y="208" width="26" height="26" rx="8" fill="#A5F3FC"/>
+    <rect x="216" y="208" width="26" height="26" rx="8" fill="#BBF7D0"/>
+    <circle cx="268" cy="258" r="52" fill="#22C55E"/>
+    <path d="M245 258L263 276L295 238" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="220" y="480" text-anchor="middle" fill="#18181B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800">B2 Selected</text>
+    <text x="220" y="512" text-anchor="middle" fill="#52525B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="500">Calendar + completion badge</text>
+  </g>
+
+  <g transform="translate(1080 220)">
+    <rect width="440" height="560" rx="40" fill="white"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#gB2)"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#glow)"/>
+    <path d="M88 244L174 330L350 160" stroke="white" stroke-opacity="0.18" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="106" y="92" width="228" height="172" rx="34" fill="#FFFFFF" opacity="0.94"/>
+    <rect x="106" y="92" width="228" height="64" rx="34" fill="white" opacity="0.98"/>
+    <path d="M120 156H320" stroke="#6E5BFF" stroke-width="11" stroke-linecap="round" opacity="0.2"/>
+    <rect x="140" y="64" width="24" height="62" rx="12" fill="white"/>
+    <rect x="276" y="64" width="24" height="62" rx="12" fill="white"/>
+    <circle cx="300" cy="228" r="40" fill="#22C55E"/>
+    <path d="M282 228L296 242L322 210" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <g filter="url(#shadow)">
+      <text x="220" y="334" text-anchor="middle" fill="#FFFFFF" font-family="Pacifico, Lobster, Brush Script MT, Segoe Script, cursive" font-size="104" font-weight="700" letter-spacing="1">Planly</text>
+    </g>
+    <text x="220" y="480" text-anchor="middle" fill="#18181B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800">M1 Merged</text>
+    <text x="220" y="512" text-anchor="middle" fill="#52525B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="500">Calendar symbol + S2 wordmark</text>
+  </g>
+</svg>

@@ -1,0 +1,67 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" rx="32" fill="#F5F7FB"/>
+  <text x="80" y="90" fill="#18181B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="42" font-weight="800">Planly Premium Cursive Wordmark Icons</text>
+  <text x="80" y="130" fill="#52525B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="500">Large centered one-line cursive logo text with a stronger checkmark behind.</text>
+
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#18D5FF"/>
+      <stop offset="0.4" stop-color="#7B5CFF"/>
+      <stop offset="0.75" stop-color="#D946EF"/>
+      <stop offset="1" stop-color="#22C55E"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14B8A6"/>
+      <stop offset="0.45" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#A855F7"/>
+    </linearGradient>
+    <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="0.5" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(170 160) rotate(48) scale(390 380)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="22" stdDeviation="24" flood-color="#312E81" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <g transform="translate(80 220)">
+    <rect width="440" height="560" rx="40" fill="white"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#g1)"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#glow)"/>
+    <path d="M88 240L176 328L356 156" stroke="white" stroke-opacity="0.2" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+    <g filter="url(#shadow)">
+      <text x="220" y="268" text-anchor="middle" fill="#FFFFFF" font-family="Lobster, Pacifico, Brush Script MT, Segoe Script, cursive" font-size="112" font-weight="700" letter-spacing="-2">Planly</text>
+    </g>
+    <text x="220" y="480" text-anchor="middle" fill="#18181B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800">S1</text>
+    <text x="220" y="512" text-anchor="middle" fill="#52525B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="500">Bold luxury script</text>
+  </g>
+
+  <g transform="translate(580 220)">
+    <rect width="440" height="560" rx="40" fill="white"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#g2)"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#glow)"/>
+    <path d="M88 240L176 328L356 156" stroke="white" stroke-opacity="0.18" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+    <g filter="url(#shadow)">
+      <text x="220" y="272" text-anchor="middle" fill="#FFFFFF" font-family="Pacifico, Lobster, Brush Script MT, Segoe Script, cursive" font-size="132" font-weight="700" letter-spacing="1">Planly</text>
+    </g>
+    <text x="220" y="480" text-anchor="middle" fill="#18181B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800">S2</text>
+    <text x="220" y="512" text-anchor="middle" fill="#52525B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="500">Soft premium cursive</text>
+  </g>
+
+  <g transform="translate(1080 220)">
+    <rect width="440" height="560" rx="40" fill="white"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#g3)"/>
+    <rect x="40" y="40" width="360" height="360" rx="92" fill="url(#glow)"/>
+    <path d="M88 240L176 328L356 156" stroke="white" stroke-opacity="0.22" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+    <g filter="url(#shadow)">
+      <text x="220" y="270" text-anchor="middle" fill="#FFFFFF" font-family="Segoe Script, Brush Script MT, Pacifico, Lobster, cursive" font-size="104" font-weight="700" letter-spacing="-2">Planly</text>
+    </g>
+    <text x="220" y="480" text-anchor="middle" fill="#18181B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800">S3</text>
+    <text x="220" y="512" text-anchor="middle" fill="#52525B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="500">Classic flowing script</text>
+  </g>
+</svg>

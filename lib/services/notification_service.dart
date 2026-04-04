@@ -1,26 +1,34 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive/hive.dart';
-import '../features/tasks/models/task_model.dart';
-import 'package:flutter/material.dart';
-import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
-/// 🔔 NotificationService — Android only
-/// Handles scheduling and cancelling local notifications.
+import '../features/tasks/models/task_model.dart';
+
+/// Handles scheduling, snoozing, and cancelling local task reminders.
 class NotificationService {
-  // Singleton — only one instance ever exists
   static final NotificationService _instance = NotificationService._internal();
+
   factory NotificationService() => _instance;
+
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  /// Snooze a notification by rescheduling it for [minutes] later
+  Future<Box<Task>> _taskBox() async {
+    if (Hive.isBoxOpen('tasks')) {
+      return Hive.box<Task>('tasks');
+    }
+
+    return Hive.openBox<Task>('tasks');
+  }
+
   Future<void> snoozeNotification(int id, {int minutes = 5}) async {
     await _plugin.zonedSchedule(
       id,
-      '🔔 Snoozed Task',
+      'Snoozed Task',
       'This is your snoozed reminder!',
       tz.TZDateTime.now(tz.local).add(Duration(minutes: minutes)),
       const NotificationDetails(
@@ -36,28 +44,25 @@ class NotificationService {
     );
   }
 
-  /// Call once in main() before runApp()
   Future<void> init() async {
-    // ✅ Initialize timezone database
     tz.initializeTimeZones();
 
-    // ✅ Android init — uses your app launcher icon
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-
     const initSettings = InitializationSettings(android: androidSettings);
 
     await _plugin.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
-        // Handle notification action buttons
+        final id = response.id ?? 0;
+
         if (response.actionId == 'snooze') {
-          final id = response.id ?? 0;
-          await NotificationService().snoozeNotification(id, minutes: 5);
-        } else if (response.actionId == 'done') {
-          final id = response.id ?? 0;
-          // Mark the corresponding task as done in Hive
-          final box = await Hive.openBox<Task>('tasks');
+          await snoozeNotification(id, minutes: 5);
+          return;
+        }
+
+        if (response.actionId == 'done') {
+          final box = await _taskBox();
           final task = box.get(id);
           if (task != null && !task.isCompleted) {
             task.isCompleted = true;
@@ -67,39 +72,31 @@ class NotificationService {
       },
     );
 
-    // ✅ Request POST_NOTIFICATIONS permission on Android 13+
     await _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
   }
 
-  /// Schedule a notification for a task
-  /// [id]            — unique int (use task's Hive key)
-  /// [title]         — notification title
-  /// [body]          — notification subtitle
-  /// [scheduledTime] — exact DateTime to fire
   Future<void> scheduleNotification({
     required int id,
     required String title,
     required String body,
     required DateTime scheduledTime,
   }) async {
-    // Don't schedule notifications in the past — they'd fire immediately
     if (scheduledTime.isBefore(DateTime.now())) return;
 
-    // Fetch the task for premium info
-    final box = await Hive.openBox<Task>('tasks');
+    final box = await _taskBox();
     final task = box.get(id);
-    String emoji = '🔔';
-    if (task != null) {
-      if (task.priority == 'High') emoji = '🔥';
-      else if (task.priority == 'Low') emoji = '🧊';
-      else emoji = '🔔';
-    }
-
-    // Accent color (fallback to violet)
-    final accentColor = const Color(0xFF7C4DFF);
+    final heading = switch (task?.priority) {
+      'High' => 'High Priority',
+      'Low' => 'Low Priority',
+      _ => 'Reminder',
+    };
+    final expandedBody = [
+      body,
+      if (task?.category?.isNotEmpty == true) 'Category: ${task!.category}',
+    ].join('\n');
 
     final androidDetails = AndroidNotificationDetails(
       'planly_tasks',
@@ -108,15 +105,13 @@ class NotificationService {
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
-      color: accentColor,
+      color: const Color(0xFF7C4DFF),
       styleInformation: BigTextStyleInformation(
-        body +
-          (task != null && task.category != null ? '\nCategory: ${task.category}' : '') +
-          (task != null && task.priority.isNotEmpty ? '\nPriority: ${task.priority}' : ''),
-        contentTitle: '$emoji $title',
+        expandedBody,
+        contentTitle: '$heading: $title',
         summaryText: 'Don\'t forget your task!',
       ),
-      actions: <AndroidNotificationAction>[
+      actions: const <AndroidNotificationAction>[
         AndroidNotificationAction(
           'snooze',
           'Snooze 5 min',
@@ -130,46 +125,23 @@ class NotificationService {
       ],
       onlyAlertOnce: true,
     );
-  /// Snooze a notification by rescheduling it for [minutes] later
-  Future<void> snoozeNotification(int id, {int minutes = 5}) async {
-    await _plugin.zonedSchedule(
-      id,
-      '🔔 Snoozed Task',
-      'This is your snoozed reminder!',
-      tz.TZDateTime.now(tz.local).add(Duration(minutes: minutes)),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'planly_tasks',
-          'Task Reminders',
-          channelDescription: 'Reminders for your Planly tasks',
-        ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
-  }
-
-    final details = NotificationDetails(android: androidDetails);
 
     await _plugin.zonedSchedule(
       id,
-      '🔔 $title',
+      title,
       body,
       tz.TZDateTime.from(scheduledTime, tz.local),
-      details,
+      NotificationDetails(android: androidDetails),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
-  /// Cancel a specific notification by its ID
   Future<void> cancelNotification(int id) async {
     await _plugin.cancel(id);
   }
 
-  /// Cancel every scheduled notification (e.g. on data wipe)
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
   }

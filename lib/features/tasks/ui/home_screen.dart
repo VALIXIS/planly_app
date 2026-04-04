@@ -1,74 +1,43 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
 import 'focus_mode_screen.dart';
 import 'package:flutter/services.dart';
-import '../../../main.dart' show rootScaffoldMessengerKey;
+import '../../../services/app_state_service.dart';
+import '../../../services/task_action_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 import 'add_task_screen.dart';
 import '../../../services/notification_service.dart';
 import 'daily_reflection_screen.dart';
+import 'widgets/home_group_header.dart';
 
 // ─────────────────────────────────────────────────────
 // Group header widget
-class _GroupHeader extends StatelessWidget {
-  final String label;
-  final int count;
-  final Color color;
-  final bool isDark;
-
-  const _GroupHeader({
-    required this.label,
-    required this.count,
-    required this.color,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: color.withOpacity(isDark ? 1.0 : 0.85),
-              letterSpacing: 0.2,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            "$count",
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: color.withOpacity(isDark ? 0.9 : 0.75),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 enum FilterType { all, today, upcoming, pending, completed }
+
+class _TaskListRow {
+  final String? headerLabel;
+  final int? headerCount;
+  final Color? headerColor;
+  final IconData? headerIcon;
+  final Task? task;
+
+  const _TaskListRow.header({
+    required this.headerLabel,
+    required this.headerCount,
+    required this.headerColor,
+    required this.headerIcon,
+  }) : task = null;
+
+  const _TaskListRow.task(this.task)
+      : headerLabel = null,
+        headerCount = null,
+        headerColor = null,
+        headerIcon = null;
+
+  bool get isHeader => task == null;
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -77,7 +46,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with AutomaticKeepAliveClientMixin<HomeScreen> {
             // Group header icons for visual interest (moved above usage)
             IconData? _groupHeaderIcon(String group) {
               switch (group) {
@@ -177,53 +147,162 @@ class _HomeScreenState extends State<HomeScreen> {
           });
         }
 
-        void _bulkComplete(bool complete) {
-          // Stub: Mark all selected tasks as complete/incomplete
-          setState(() {
-            // Implement logic as needed
-          });
-        }
-
-        void _bulkDelete() {
-          // Stub: Delete all selected tasks
-          setState(() {
-            // Implement logic as needed
-          });
-        }
+        String _dateStamp(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
 
         Future<void> _setTaskCompletion(Task task, bool complete) async {
-          // Stub: Set completion status for a task
-          setState(() {
-            task.isCompleted = complete;
-          });
+          final changed =
+              await TaskActionService.setTaskCompletion(task, complete);
+          if (changed && complete) {
+            _confettiController.play();
+          }
+        }
+
+        Future<void> _bulkComplete(bool complete) async {
+          final box = Hive.box<Task>('tasks');
+          final selectedTasks = _selectedKeys
+              .map((key) => box.get(key))
+              .whereType<Task>()
+              .toList();
+
+          for (final task in selectedTasks) {
+            await _setTaskCompletion(task, complete);
+          }
+
+          if (mounted) _exitSelectionMode();
+        }
+
+        Future<void> _bulkDelete() async {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('Delete Selected Tasks'),
+              content: Text(
+                'Delete ${_selectedKeys.length} selected task(s)? This cannot be undone.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+          );
+
+          if (confirmed != true) return;
+
+          final box = Hive.box<Task>('tasks');
+          final selectedTasks = _selectedKeys
+              .map((key) => box.get(key))
+              .whereType<Task>()
+              .toList();
+
+          for (final task in selectedTasks) {
+            final key = task.key;
+            if (key is int) {
+              await NotificationService().cancelNotification(key);
+            }
+            await task.delete();
+          }
+
+          if (mounted) {
+            _exitSelectionMode();
+            AppStateService.rootScaffoldMessengerKey.currentState
+              ?..hideCurrentSnackBar()
+              ..showSnackBar(
+                SnackBar(
+                  content: Text('${selectedTasks.length} task(s) deleted'),
+                ),
+              );
+          }
         }
       int _streak = 0;
+      String? _lastStreakAwardDate;
+      String? _lastReflectionDate;
+      bool _isReflectionOpen = false;
 
       void _checkAndUpdateStreak(List<Task> todayTasks) {
-        // Simple streak logic: count completed tasks
-        final completed = todayTasks.where((t) => t.isCompleted).length;
-        if (completed == todayTasks.length && todayTasks.isNotEmpty) {
-          setState(() {
-            _streak++;
-          });
+        if (todayTasks.isEmpty || todayTasks.any((task) => !task.isCompleted)) {
+          return;
+        }
+
+        final todayStamp = _dateStamp(DateTime.now());
+        if (_lastStreakAwardDate == todayStamp) return;
+
+        _lastStreakAwardDate = todayStamp;
+        _streak += 1;
+        Hive.box('settings')
+          ..put('taskStreakCount', _streak)
+          ..put('lastStreakAwardDate', todayStamp);
+
+        if (mounted) {
+          setState(() {});
         }
       }
 
-      void _maybeShowReflection(double pct, int completed, int total, List<Task> todayTasks) {
-        // Stub: No-op for now
+      void _maybeShowReflection(double pct, int completed, int total) {
+        if (!mounted || total == 0 || completed < total || _isReflectionOpen) {
+          return;
+        }
+
+        final todayStamp = _dateStamp(DateTime.now());
+        if (_lastReflectionDate == todayStamp) return;
+
+        _isReflectionOpen = true;
+        _lastReflectionDate = todayStamp;
+        Hive.box('settings').put('lastReflectionDate', todayStamp);
+
+        Navigator.of(context)
+            .push(
+              MaterialPageRoute(
+                builder: (_) => DailyReflectionScreen(
+                  pct: pct,
+                  completed: completed,
+                  total: total,
+                  onContinue: () => Navigator.pop(context),
+                ),
+              ),
+            )
+            .whenComplete(() {
+              _isReflectionOpen = false;
+            });
       }
     late ConfettiController _confettiController;
     // Example categories, adjust as needed
-    final List<String> categories = ["Work", "Personal", "Other"];
+    final List<String> categories = ["Work", "Personal", "Shopping", "Others"];
 
-    // Stub for suggested task logic
     Task? _getSuggestedTask(List<Task> tasks) {
-      // Return the first pending task as a suggestion, or null if none
-      try {
-        return tasks.firstWhere((t) => !t.isCompleted);
-      } catch (_) {
+      final pendingTasks = tasks.where((task) => !task.isCompleted).toList();
+      if (pendingTasks.isEmpty) {
         return null;
       }
+
+      const priorityOrder = {'High': 0, 'Medium': 1, 'Low': 2};
+      pendingTasks.sort((a, b) {
+        final aDue = a.dueDate;
+        final bDue = b.dueDate;
+        if (aDue != null && bDue != null) {
+          final dueComparison = aDue.compareTo(bDue);
+          if (dueComparison != 0) return dueComparison;
+        } else if (aDue != null) {
+          return -1;
+        } else if (bDue != null) {
+          return 1;
+        }
+
+        return (priorityOrder[a.priority] ?? 1).compareTo(
+          priorityOrder[b.priority] ?? 1,
+        );
+      });
+
+      return pendingTasks.first;
     }
   FilterType selectedFilter = FilterType.all;
   String searchQuery = "";
@@ -235,7 +314,16 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _confettiController = ConfettiController(duration: const Duration(seconds: 2));
-    // Any other initialization logic here
+    final settings = Hive.box('settings');
+    _streak = settings.get('taskStreakCount', defaultValue: 0) as int;
+    _lastStreakAwardDate = settings.get('lastStreakAwardDate') as String?;
+    _lastReflectionDate = settings.get('lastReflectionDate') as String?;
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
   }
 
   // ...existing code...
@@ -322,8 +410,38 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  List<_TaskListRow> _buildTaskRows(
+    Map<String, List<Task>> displayGroups,
+    bool useSmartFlow,
+    Color primary,
+  ) {
+    final rows = <_TaskListRow>[];
+
+    for (final entry in displayGroups.entries) {
+      if (entry.value.isEmpty) continue;
+
+      rows.add(
+        _TaskListRow.header(
+          headerLabel: entry.key,
+          headerCount: entry.value.length,
+          headerColor:
+              useSmartFlow ? _groupHeaderColor(entry.key, primary) : primary,
+          headerIcon: _groupHeaderIcon(entry.key),
+        ),
+      );
+
+      for (final task in entry.value) {
+        rows.add(_TaskListRow.task(task));
+      }
+    }
+
+    return rows;
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     final box = Hive.box<Task>('tasks');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
@@ -338,61 +456,56 @@ class _HomeScreenState extends State<HomeScreen> {
               final now = DateTime.now();
               final suggestedTask = _getSuggestedTask(allTasks);
 
-              // ...existing code for counts, filtering, sorting, displayGroups...
-              final todayCount = allTasks.where((t) {
-                final due = t.dueDate;
-                if (due == null) return false;
-                return isSameDay(due, now);
-              }).length;
-              final upcomingCount = allTasks.where((t) {
-                final due = t.dueDate;
-                if (due == null) return false;
-                return due.isAfter(now);
-              }).length;
-              final pendingCount = allTasks.where((t) => !t.isCompleted).length;
-              final completedCount = allTasks.where((t) => t.isCompleted).length;
+              int todayCount = 0;
+              int upcomingCount = 0;
+              int pendingCount = 0;
+              int completedCount = 0;
+              final todayTasks = <Task>[];
+              final query = searchQuery.trim().toLowerCase();
+              final tasks = <Task>[];
 
-              final todayTasks = allTasks.where((t) {
-                final due = t.dueDate;
-                if (due == null) return false;
-                return isSameDay(due, now);
-              }).toList();
+              for (final task in allTasks) {
+                final due = task.dueDate;
+                final isToday = due != null && isSameDay(due, now);
+                final matchesSearch =
+                    query.isEmpty || task.title.toLowerCase().contains(query);
+
+                if (isToday) {
+                  todayCount += 1;
+                  todayTasks.add(task);
+                }
+
+                if (due != null && due.isAfter(now)) {
+                  upcomingCount += 1;
+                }
+
+                if (task.isCompleted) {
+                  completedCount += 1;
+                } else {
+                  pendingCount += 1;
+                }
+
+                if (!matchesSearch) continue;
+
+                final includeTask = switch (selectedFilter) {
+                  FilterType.all => true,
+                  FilterType.today => isToday,
+                  FilterType.upcoming => due != null && due.isAfter(now),
+                  FilterType.pending => !task.isCompleted,
+                  FilterType.completed => task.isCompleted,
+                };
+
+                if (includeTask) {
+                  tasks.add(task);
+                }
+              }
+
               final todayCompleted = todayTasks.where((t) => t.isCompleted).length;
               final todayTotal = todayTasks.length;
               final reflectionPct = todayTotal == 0
                   ? 0.0
                   : todayCompleted / todayTotal;
-
-              List<Task> tasks = [];
-              if (selectedFilter == FilterType.all) {
-                tasks = allTasks;
-              } else if (selectedFilter == FilterType.today) {
-                tasks = allTasks.where((task) {
-                  final due = task.dueDate;
-                  if (due == null) return false;
-                  return isSameDay(due, now);
-                }).toList();
-              } else if (selectedFilter == FilterType.upcoming) {
-                tasks = allTasks.where((task) {
-                  final due = task.dueDate;
-                  if (due == null) return false;
-                  return due.isAfter(now);
-                }).toList();
-              } else if (selectedFilter == FilterType.pending) {
-                tasks = allTasks.where((t) => !t.isCompleted).toList();
-              } else if (selectedFilter == FilterType.completed) {
-                tasks = allTasks.where((t) => t.isCompleted).toList();
-              }
-
-              if (searchQuery.isNotEmpty) {
-                tasks = tasks
-                    .where(
-                      (task) => task.title.toLowerCase().contains(
-                        searchQuery.toLowerCase(),
-                      ),
-                    )
-                    .toList();
-              }
+              final todayStamp = _dateStamp(now);
 
               const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
               void sortGroup(List<Task> group) {
@@ -434,17 +547,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               }
 
-              final bool isEmpty = displayGroups.values.every((g) => g.isEmpty);
+              final taskRows = _buildTaskRows(displayGroups, useSmartFlow, primary);
+              final bool isEmpty = taskRows.isEmpty;
 
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _checkAndUpdateStreak(todayTasks);
-                _maybeShowReflection(
-                  reflectionPct,
-                  todayCompleted,
-                  todayTotal,
-                  todayTasks,
-                );
-              });
+              if (todayTotal > 0 &&
+                  todayCompleted == todayTotal &&
+                  (_lastStreakAwardDate != todayStamp ||
+                      _lastReflectionDate != todayStamp)) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _checkAndUpdateStreak(todayTasks);
+                  _maybeShowReflection(
+                    reflectionPct,
+                    todayCompleted,
+                    todayTotal,
+                  );
+                });
+              }
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -475,7 +593,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Card(
                         elevation: 3,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        color: isDark ? Colors.black.withOpacity(0.7) : Colors.white.withOpacity(0.85),
+                        color: isDark
+                            ? Colors.black.withValues(alpha: 0.7)
+                            : Colors.white.withValues(alpha: 0.85),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           child: Row(
@@ -538,9 +658,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                     isDark: isDark,
                                     color: _streak > 0 ? Colors.orange : Colors.grey.shade400,
                                     bgColor: _streak > 0
-                                        ? Colors.orange.withOpacity(0.12)
+                                        ? Colors.orange.withValues(alpha: 0.12)
                                         : (isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade100),
-                                    borderColor: _streak > 0 ? Colors.orange.withOpacity(0.3) : Colors.transparent,
+                                    borderColor: _streak > 0
+                                        ? Colors.orange.withValues(alpha: 0.3)
+                                        : Colors.transparent,
                                     icon: Icons.local_fire_department_rounded,
                                     label: "$_streak",
                                   ),
@@ -556,8 +678,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                     child: _HeaderBadge(
                                       isDark: isDark,
                                       color: primary,
-                                      bgColor: primary.withOpacity(0.1),
-                                      borderColor: primary.withOpacity(0.2),
+                                      bgColor: primary.withValues(alpha: 0.1),
+                                      borderColor:
+                                          primary.withValues(alpha: 0.2),
                                       icon: Icons.center_focus_strong_rounded,
                                       label: "Focus",
                                     ),
@@ -590,11 +713,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             decoration: BoxDecoration(
                               color: isDark
-                                  ? Colors.black.withOpacity(0.7)
-                                  : Colors.white.withOpacity(0.85),
+                                  ? Colors.black.withValues(alpha: 0.7)
+                                  : Colors.white.withValues(alpha: 0.85),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: primary.withOpacity(0.25),
+                                color: primary.withValues(alpha: 0.25),
                                 width: 1,
                               ),
                             ),
@@ -605,7 +728,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   width: 3,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: primary.withOpacity(0.6),
+                                    color: primary.withValues(alpha: 0.6),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
@@ -757,52 +880,51 @@ class _HomeScreenState extends State<HomeScreen> {
                   // 🔥 Filter chips (removed duplicate row)
                   // 📋 Task list
                   Expanded(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      child: isEmpty
-                          ? _emptyState(context)
-                          : ListView(
-                              key: ValueKey(
-                                selectedFilter.toString() + searchQuery,
-                              ),
-                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-                              children: displayGroups.entries
-                                  .where((e) => e.value.isNotEmpty)
-                                  .map((entry) {
-                                    final headerColor = useSmartFlow
-                                        ? _groupHeaderColor(entry.key, primary)
-                                        : primary;
-                                    final groupIcon = _groupHeaderIcon(entry.key);
-                                    return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const SizedBox(height: 16),
-                                        Row(
-                                          children: [
-                                            if (groupIcon != null) ...[
-                                              Icon(groupIcon, color: headerColor, size: 18),
-                                              const SizedBox(width: 6),
-                                            ],
-                                            _GroupHeader(
-                                              label: entry.key,
-                                              count: entry.value.length,
-                                              color: headerColor,
-                                              isDark: isDark,
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        ...entry.value.map(
-                                          (task) => _buildTaskItem(task, primary, isDark),
-                                        ),
-                                      ],
-                                    );
-                                  })
-                                  .toList(),
+                    child: isEmpty
+                        ? _emptyState(context)
+                        : ListView.builder(
+                            key: ValueKey(
+                              '${selectedFilter.name}-$searchQuery',
                             ),
-                    ),
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
+                            cacheExtent: 800,
+                            itemCount: taskRows.length,
+                            itemBuilder: (context, index) {
+                              final row = taskRows[index];
+                              if (row.isHeader) {
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(0, 16, 0, 8),
+                                  child: Row(
+                                    children: [
+                                      if (row.headerIcon != null) ...[
+                                        Icon(
+                                          row.headerIcon,
+                                          color: row.headerColor,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 6),
+                                      ],
+                                      HomeGroupHeader(
+                                        label: row.headerLabel!,
+                                        count: row.headerCount!,
+                                        color: row.headerColor!,
+                                        isDark: isDark,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              return RepaintBoundary(
+                                child: _buildTaskItem(
+                                  row.task!,
+                                  primary,
+                                  isDark,
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 ],
               );
@@ -821,6 +943,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   // ─────────────────────────────────────────────
   // Selection mode top bar
@@ -957,7 +1082,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           await NotificationService().cancelNotification(task.key as int);
           await task.delete();
-          rootScaffoldMessengerKey.currentState
+          AppStateService.rootScaffoldMessengerKey.currentState
             ?..hideCurrentSnackBar()
             ..showSnackBar(
               SnackBar(
@@ -980,13 +1105,10 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.only(right: 20),
           child: const Icon(Icons.delete, color: Colors.white),
         ),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 300),
+        child: Opacity(
           opacity: task.isCompleted ? 0.55 : 1.0,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            margin: EdgeInsets.symmetric(vertical: task.isCompleted ? 2 : 4),
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: task.isCompleted ? 2 : 4),
             child: Card(
               margin: EdgeInsets.zero,
               clipBehavior: Clip.antiAlias,
@@ -1001,12 +1123,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? BorderSide(color: primary.withValues(alpha: 0.4), width: 1.5)
                     : BorderSide.none,
               ),
-              child: IntrinsicHeight(
-                child: Row(
-                  children: [
-                    Container(width: 4, color: getPriorityColor(task.priority)),
-                    Expanded(
-                      child: ListTile(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: getPriorityColor(task.priority),
+                      width: 4,
+                    ),
+                  ),
+                ),
+                child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 8,
@@ -1136,10 +1262,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                             ],
                           ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1260,29 +1383,6 @@ class _HomeScreenState extends State<HomeScreen> {
 // ─────────────────────────────────────────────────────
 // 🎨 Decorative soft shapes painter
 // ─────────────────────────────────────────────────────
-class _SoftShapesPainter extends CustomPainter {
-  final Color color;
-  final bool isDark;
-  _SoftShapesPainter({required this.color, required this.isDark});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-    paint.color = color.withValues(alpha: isDark ? 0.08 : 0.10);
-    canvas.drawCircle(Offset(size.width + 10, -10), 90, paint);
-    paint.color = color.withValues(alpha: isDark ? 0.05 : 0.07);
-    canvas.drawCircle(Offset(size.width - 40, 65), 55, paint);
-    paint.color = color.withValues(alpha: isDark ? 0.04 : 0.05);
-    canvas.drawCircle(Offset(-18, size.height * 0.65), 42, paint);
-    paint.color = color.withValues(alpha: isDark ? 0.07 : 0.09);
-    canvas.drawCircle(Offset(size.width * 0.65, size.height * 0.2), 16, paint);
-  }
-
-  @override
-  bool shouldRepaint(_SoftShapesPainter old) =>
-      old.color != color || old.isDark != isDark;
-}
-
 // ─────────────────────────────────────────────────────
 // Reusable widgets
 // ─────────────────────────────────────────────────────

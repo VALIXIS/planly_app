@@ -2,8 +2,9 @@
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
-import '../../../main.dart' show accentColorNotifier, themeNotifier;
+import '../../../services/app_state_service.dart';
 import '../../../services/admob_service.dart';
+import '../../../services/analytics_service.dart';
 import '../../../services/notification_service.dart';
 import '../models/task_model.dart';
 import 'feedback_screen.dart';
@@ -49,16 +50,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Color get _selectedAccentColor =>
       Color(_settings.get('accentColor', defaultValue: 0xFF7C4DFF) as int);
 
+  bool get _analyticsEnabled =>
+      _settings.get('analyticsEnabled', defaultValue: true) as bool;
+
+  bool get _adsPersonalizationEnabled =>
+      _settings.get('adsPersonalizationEnabled', defaultValue: false) as bool;
+
+  bool get _supportAdsEnabled =>
+      _settings.get('supportAdsEnabled', defaultValue: true) as bool;
+
   @override
   void initState() {
     super.initState();
+    _loadBannerAd();
+  }
 
-    if (!AdMobService.isSupportedPlatform) return;
+  void _loadBannerAd() {
+    _bannerAd?.dispose();
+    _bannerAd = null;
+    _isBannerLoaded = false;
+
+    if (!AdMobService.isSupportedPlatform || !AdMobService.supportAdsEnabled) {
+      if (mounted) setState(() {});
+      return;
+    }
 
     _bannerAd = BannerAd(
-      adUnitId: AdMobService.bannerTestAdUnitId,
+      adUnitId: AdMobService.bannerAdUnitId,
       size: AdSize.banner,
-      request: const AdRequest(),
+      request: AdMobService.buildBannerRequest(),
       listener: BannerAdListener(
         onAdLoaded: (_) {
           if (mounted) setState(() => _isBannerLoaded = true);
@@ -83,8 +103,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _setAccentColor(Color color) {
-    accentColorNotifier.value = color;
-    _saveSetting('accentColor', color.toARGB32());
+    AppStateService.setAccentColor(color);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _setAnalyticsEnabled(bool enabled) async {
+    await AnalyticsService.setEnabled(enabled);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _setAdsPersonalizationEnabled(bool enabled) async {
+    await AdMobService.setPersonalizedAdsEnabled(enabled);
+    if (mounted) {
+      setState(() {});
+      _loadBannerAd();
+    }
+  }
+
+  Future<void> _setSupportAdsEnabled(bool enabled) async {
+    await AdMobService.setSupportAdsEnabled(enabled);
+    if (mounted) {
+      setState(() {});
+      _loadBannerAd();
+    }
   }
 
   Future<void> _confirmClearAllTasks() async {
@@ -319,7 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _card(
                   isDark: isDark,
                   child: ValueListenableBuilder<ThemeMode>(
-                    valueListenable: themeNotifier,
+                    valueListenable: AppStateService.themeNotifier,
                     builder: (context, mode, _) {
                       return SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
@@ -334,9 +375,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         value: mode == ThemeMode.dark,
                         onChanged: (value) {
-                          themeNotifier.value =
-                              value ? ThemeMode.dark : ThemeMode.light;
-                          _saveSetting('isDarkMode', value);
+                          AppStateService.setThemeMode(
+                            value ? ThemeMode.dark : ThemeMode.light,
+                          );
+                          if (mounted) setState(() {});
                         },
                       );
                     },
@@ -426,6 +468,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                _sectionTitle('Privacy', isDark),
+                _card(
+                  isDark: isDark,
+                  child: Column(
+                    children: [
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: Icon(
+                          Icons.insights_outlined,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                        title: const Text('Local Analytics Logs'),
+                        subtitle: Text(
+                          'Logs app events only in debug mode on this device',
+                          style: TextStyle(fontSize: 12, color: subtitleColor),
+                        ),
+                        value: _analyticsEnabled,
+                        onChanged: _setAnalyticsEnabled,
+                      ),
+                      Divider(
+                        height: 1,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.06),
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: Icon(
+                          Icons.ads_click_outlined,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                        title: const Text('Personalized Ads'),
+                        subtitle: Text(
+                          'When off, ad requests are sent as non-personalized',
+                          style: TextStyle(fontSize: 12, color: subtitleColor),
+                        ),
+                        value: _adsPersonalizationEnabled,
+                        onChanged: _supportAdsEnabled
+                            ? _setAdsPersonalizationEnabled
+                            : null,
+                      ),
+                      Divider(
+                        height: 1,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.06),
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: Icon(
+                          Icons.campaign_outlined,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                        title: const Text('Support Ads'),
+                        subtitle: Text(
+                          'Keep off for a cleaner, smoother experience',
+                          style: TextStyle(fontSize: 12, color: subtitleColor),
+                        ),
+                        value: _supportAdsEnabled,
+                        onChanged: _setSupportAdsEnabled,
+                      ),
+                    ],
                   ),
                 ),
 
@@ -524,7 +632,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          if (_isBannerLoaded && _bannerAd != null)
+          if (_supportAdsEnabled && AdMobService.isSupportedPlatform)
             Container(
               padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
               decoration: BoxDecoration(
@@ -544,9 +652,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 6),
                   SizedBox(
-                    width: _bannerAd!.size.width.toDouble(),
-                    height: _bannerAd!.size.height.toDouble(),
-                    child: AdWidget(ad: _bannerAd!),
+                    width: AdSize.banner.width.toDouble(),
+                    height: AdSize.banner.height.toDouble(),
+                    child: _isBannerLoaded && _bannerAd != null
+                        ? AdWidget(ad: _bannerAd!)
+                        : const SizedBox.shrink(),
                   ),
                 ],
               ),

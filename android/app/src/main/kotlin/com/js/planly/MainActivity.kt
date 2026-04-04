@@ -1,4 +1,4 @@
-package com.example.planly
+package com.js.planly
 
 import io.flutter.embedding.android.FlutterActivity
 

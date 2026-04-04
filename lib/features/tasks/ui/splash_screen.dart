@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../../../main.dart' show accentColorNotifier;
+import '../../../services/app_state_service.dart';
 
 /// 🌅 SplashScreen
 /// - Gradient uses the user's chosen accent color
@@ -191,7 +191,7 @@ class _SplashScreenState extends State<SplashScreen>
     final showQuote = _showQuote;
 
     // Use user's accent color for gradient
-    final accent = accentColorNotifier.value;
+    final accent = AppStateService.accentColorNotifier.value;
     final gradientColors = _buildGradient(accent);
     final glowColor = accent;
     // Accent highlight — lighter tint for badges/dots

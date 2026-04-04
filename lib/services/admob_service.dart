@@ -1,11 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:hive/hive.dart';
 
 class AdMobService {
   AdMobService._();
-
-  static const String androidAppId = 'ca-app-pub-3940256099942544~3347511713';
-  static const String iosAppId = 'ca-app-pub-3940256099942544~1458002511';
 
   static const String _androidBannerTestAdUnitId =
       'ca-app-pub-3940256099942544/6300978111';
@@ -17,13 +15,51 @@ class AdMobService {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
 
-  static String get bannerTestAdUnitId {
+  static bool get personalizedAdsEnabled {
+    if (!Hive.isBoxOpen('settings')) return false;
+    return Hive.box('settings').get(
+      'adsPersonalizationEnabled',
+      defaultValue: false,
+    ) as bool;
+  }
+
+  static bool get supportAdsEnabled {
+    if (!Hive.isBoxOpen('settings')) return false;
+    return Hive.box('settings').get(
+      'supportAdsEnabled',
+      defaultValue: true,
+    ) as bool;
+  }
+
+  static String get bannerAdUnitId {
     switch (defaultTargetPlatform) {
       case TargetPlatform.iOS:
-        return _iosBannerTestAdUnitId;
+        return const String.fromEnvironment(
+          'IOS_BANNER_AD_UNIT_ID',
+          defaultValue: _iosBannerTestAdUnitId,
+        );
       case TargetPlatform.android:
       default:
-        return _androidBannerTestAdUnitId;
+        return const String.fromEnvironment(
+          'ANDROID_BANNER_AD_UNIT_ID',
+          defaultValue: _androidBannerTestAdUnitId,
+        );
+    }
+  }
+
+  static AdRequest buildBannerRequest() {
+    return AdRequest(nonPersonalizedAds: !personalizedAdsEnabled);
+  }
+
+  static Future<void> setPersonalizedAdsEnabled(bool enabled) async {
+    if (Hive.isBoxOpen('settings')) {
+      await Hive.box('settings').put('adsPersonalizationEnabled', enabled);
+    }
+  }
+
+  static Future<void> setSupportAdsEnabled(bool enabled) async {
+    if (Hive.isBoxOpen('settings')) {
+      await Hive.box('settings').put('supportAdsEnabled', enabled);
     }
   }
 
@@ -31,7 +67,10 @@ class AdMobService {
     if (!isSupportedPlatform) return;
 
     await MobileAds.instance.updateRequestConfiguration(
-      RequestConfiguration(testDeviceIds: <String>['EMULATOR']),
+      RequestConfiguration(
+        maxAdContentRating: MaxAdContentRating.pg,
+        testDeviceIds: kReleaseMode ? const <String>[] : const <String>['EMULATOR'],
+      ),
     );
 
     await MobileAds.instance.initialize();

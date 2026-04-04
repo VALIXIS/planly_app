@@ -1,5 +1,5 @@
 name: planly
-description: "A new Flutter project."
+description: "Planly is a Flutter task planner with reminders, calendar views, focus mode, and daily reflection."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -27,6 +27,9 @@ dependencies:
   # Notifications
   flutter_local_notifications: ^17.2.2
   timezone: ^0.9.4
+
+  # External links and email intents
+  url_launcher: ^6.3.1
 
   # 🎉 Confetti animation
   confetti: ^0.8.0
