@@ -8,7 +8,6 @@ import 'features/tasks/ui/onboarding_screen.dart';
 import 'features/tasks/ui/settings_screen.dart';
 import 'features/tasks/ui/splash_screen.dart';
 import 'services/admob_service.dart';
-import 'services/analytics_service.dart';
 import 'services/app_state_service.dart';
 import 'services/notification_service.dart';
 
@@ -23,7 +22,6 @@ Future<void> main() async {
   AppStateService.loadPersistedSettings();
 
   await NotificationService().init();
-  await AnalyticsService.init();
   await AdMobService.initialize();
 
   runApp(const MyApp());

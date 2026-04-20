@@ -29,7 +29,14 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   void _loadBannerAd() {
-    if (!AdMobService.isSupportedPlatform || !AdMobService.supportAdsEnabled) {
+    _bannerAd?.dispose();
+    _bannerAd = null;
+    _isBannerLoaded = false;
+
+    if (!AdMobService.isSupportedPlatform) {
+      if (mounted) {
+        setState(() {});
+      }
       return;
     }
 
@@ -237,8 +244,7 @@ class _CalendarScreenState extends State<CalendarScreen>
               ),
             ),
             ),
-            if (AdMobService.supportAdsEnabled &&
-                AdMobService.isSupportedPlatform)
+            if (AdMobService.isSupportedPlatform)
               SizedBox(
                 width: AdSize.banner.width.toDouble(),
                 height: AdSize.banner.height.toDouble(),

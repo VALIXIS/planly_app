@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
-import '../../../services/analytics_service.dart';
 import '../../../services/notification_service.dart';
 import '../models/task_model.dart';
 
@@ -338,17 +337,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           );
         }
 
-        await AnalyticsService.logEvent(
-          'task_updated',
-          parameters: {
-            'task_id': task.key as int,
-            'category': selectedCategory,
-            'priority': selectedPriority,
-            'reminder_enabled': enableReminder,
-            'repeat_type': repeatType,
-          },
-        );
-
         if (mounted) Navigator.pop(context);
         return;
       }
@@ -367,17 +355,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       );
 
       final key = await box.add(newTask);
-
-      await AnalyticsService.logEvent(
-        'task_added',
-        parameters: {
-          'task_id': key,
-          'category': selectedCategory,
-          'priority': selectedPriority,
-          'reminder_enabled': enableReminder,
-          'repeat_type': repeatType,
-        },
-      );
 
       if (enableReminder && reminderAt != null) {
         await notifService.scheduleNotification(

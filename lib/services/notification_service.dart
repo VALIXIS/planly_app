@@ -6,7 +6,6 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../features/tasks/models/task_model.dart';
-import 'analytics_service.dart';
 
 /// Handles scheduling, snoozing, and cancelling local task reminders.
 class NotificationService {
@@ -174,14 +173,6 @@ class NotificationService {
           UILocalNotificationDateInterpretation.absoluteTime,
     );
 
-    await AnalyticsService.logEvent(
-      'notification_scheduled',
-      parameters: {
-        'task_id': id,
-        'scheduled_at': resolvedScheduleTime.toIso8601String(),
-        'schedule_mode': _scheduleMode.name,
-      },
-    );
   }
 
   Future<void> cancelNotification(int id) async {

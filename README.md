@@ -7,7 +7,7 @@ Planly is a Flutter task planner with local reminders, a calendar view, focus mo
 - Set due dates, reminders, priorities, categories, and repeat rules
 - View tasks by smart groups, filters, and calendar date
 - Use Focus Mode for one-task-at-a-time execution
-- Customize dark mode, accent color, splash/home quotes, analytics logs, and personalized ads
+- Customize dark mode, accent color, and splash/home quotes
 - Send feedback through the device email app
 
 **Setup**
@@ -25,8 +25,8 @@ Planly is a Flutter task planner with local reminders, a calendar view, focus mo
 **Storage And Privacy**
 - Tasks and settings are stored locally with Hive.
 - Notifications are scheduled locally through `flutter_local_notifications`.
-- Analytics is local debug logging only and can be disabled in Settings.
-- Google Mobile Ads is used on supported mobile platforms, with a non-personalized ads toggle in Settings.
+- Planly does not send usage analytics logs to a third-party analytics provider.
+- Google Mobile Ads is used on supported mobile platforms.
 
 **Ad Unit IDs**
 - Debug/test ads use Google sample ad unit IDs by default.

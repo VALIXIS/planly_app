@@ -4,7 +4,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../../services/app_state_service.dart';
 import '../../../services/admob_service.dart';
-import '../../../services/analytics_service.dart';
 import '../../../services/notification_service.dart';
 import '../models/task_model.dart';
 import 'feedback_screen.dart';
@@ -49,12 +48,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Color get _selectedAccentColor =>
       Color(_settings.get('accentColor', defaultValue: 0xFF7C4DFF) as int);
-
-  bool get _analyticsEnabled =>
-      _settings.get('analyticsEnabled', defaultValue: true) as bool;
-
-  bool get _adsPersonalizationEnabled =>
-      _settings.get('adsPersonalizationEnabled', defaultValue: false) as bool;
 
   @override
   void initState() {
@@ -102,19 +95,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _setAccentColor(Color color) {
     AppStateService.setAccentColor(color);
     if (mounted) setState(() {});
-  }
-
-  Future<void> _setAnalyticsEnabled(bool enabled) async {
-    await AnalyticsService.setEnabled(enabled);
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _setAdsPersonalizationEnabled(bool enabled) async {
-    await AdMobService.setPersonalizedAdsEnabled(enabled);
-    if (mounted) {
-      setState(() {});
-      _loadBannerAd();
-    }
   }
 
   Future<void> _confirmClearAllTasks() async {
@@ -230,7 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Theme, colors, quotes, privacy and data controls',
+                  'Theme, colors, quotes, and app preferences',
                   style: TextStyle(
                     fontSize: 12,
                     color: subtitleColor,
@@ -457,50 +437,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-                _sectionTitle('Privacy', isDark),
-                _card(
-                  isDark: isDark,
-                  child: Column(
-                    children: [
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        secondary: Icon(
-                          Icons.insights_outlined,
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
-                        title: const Text('Local Analytics Logs'),
-                        subtitle: Text(
-                          'Logs app events only in debug mode on this device',
-                          style: TextStyle(fontSize: 12, color: subtitleColor),
-                        ),
-                        value: _analyticsEnabled,
-                        onChanged: _setAnalyticsEnabled,
-                      ),
-                      Divider(
-                        height: 1,
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.06)
-                            : Colors.black.withValues(alpha: 0.06),
-                      ),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        secondary: Icon(
-                          Icons.ads_click_outlined,
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
-                        title: const Text('Personalized Ads'),
-                        subtitle: Text(
-                          'When off, ad requests are sent as non-personalized',
-                          style: TextStyle(fontSize: 12, color: subtitleColor),
-                        ),
-                        value: _adsPersonalizationEnabled,
-                        onChanged: _setAdsPersonalizationEnabled,
-                      ),
-                    ],
                   ),
                 ),
 

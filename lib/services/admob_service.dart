@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:hive/hive.dart';
 
 class AdMobService {
   AdMobService._();
@@ -21,16 +20,6 @@ class AdMobService {
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
-
-  static bool get personalizedAdsEnabled {
-    if (!Hive.isBoxOpen('settings')) return false;
-    return Hive.box('settings').get(
-      'adsPersonalizationEnabled',
-      defaultValue: false,
-    ) as bool;
-  }
-
-  static bool get supportAdsEnabled => true;
 
   static String get bannerAdUnitId {
     switch (defaultTargetPlatform) {
@@ -68,13 +57,7 @@ class AdMobService {
   }
 
   static AdRequest buildBannerRequest() {
-    return AdRequest(nonPersonalizedAds: !personalizedAdsEnabled);
-  }
-
-  static Future<void> setPersonalizedAdsEnabled(bool enabled) async {
-    if (Hive.isBoxOpen('settings')) {
-      await Hive.box('settings').put('adsPersonalizationEnabled', enabled);
-    }
+    return AdRequest();
   }
 
   static Future<void> initialize() async {

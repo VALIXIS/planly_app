@@ -37,7 +37,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
             SizedBox(height: 8),
             Text(
-              'Planly shows Google Mobile Ads on supported mobile platforms. You can keep Personalized Ads off in Settings so ad requests are sent as non-personalized.',
+              'Planly shows Google Mobile Ads in designated ad spaces on supported mobile platforms.',
               style: TextStyle(fontSize: 16, height: 1.4),
             ),
             SizedBox(height: 16),
@@ -47,7 +47,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
             SizedBox(height: 8),
             Text(
-              'Analytics in this build are local debug logs only and are not sent to a third-party analytics provider. You can disable local analytics logging from Settings.',
+              'Planly does not send usage analytics logs to a third-party analytics provider.',
               style: TextStyle(fontSize: 16, height: 1.4),
             ),
             SizedBox(height: 16),
