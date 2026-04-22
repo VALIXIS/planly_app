@@ -7,6 +7,7 @@ import '../../../services/admob_service.dart';
 import '../../../services/notification_service.dart';
 import '../models/task_model.dart';
 import 'feedback_screen.dart';
+import 'notification_reliability_wizard_screen.dart';
 import 'privacy_policy_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -34,6 +35,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   BannerAd? _bannerAd;
   bool _isBannerLoaded = false;
+  final NotificationService _notificationService = NotificationService();
+
+  AndroidNotificationHealth? _androidNotificationHealth;
+  bool _isCheckingNotificationHealth = false;
 
   Box<dynamic> get _settings => Hive.box('settings');
 
@@ -53,6 +58,118 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadBannerAd();
+    _loadNotificationHealth();
+  }
+
+  Future<void> _loadNotificationHealth() async {
+    if (!NotificationService.isAndroidDevice) return;
+
+    if (mounted) {
+      setState(() => _isCheckingNotificationHealth = true);
+    }
+
+    final health = await _notificationService.getAndroidNotificationHealth();
+
+    if (!mounted) return;
+    setState(() {
+      _androidNotificationHealth = health;
+      _isCheckingNotificationHealth = false;
+    });
+  }
+
+  String _notificationHealthSummary() {
+    if (_isCheckingNotificationHealth) {
+      return 'Checking battery and alarm permissions...';
+    }
+
+    final health = _androidNotificationHealth;
+    if (health == null) {
+      return 'Could not read device battery restrictions. You can still open settings manually.';
+    }
+
+    final summary = <String>[
+      health.isIgnoringBatteryOptimizations
+          ? 'Battery optimization is unrestricted'
+          : 'Battery optimization is restricted',
+      health.canScheduleExactAlarms
+          ? 'exact alarms are allowed'
+          : 'exact alarms are blocked',
+      health.isPowerSaveModeEnabled
+          ? 'power saver is on'
+          : 'power saver is off',
+    ];
+
+    return '${health.deviceLabel}: ${summary.join(', ')}.';
+  }
+
+  Future<void> _openBatteryOptimizationSettings() async {
+    final opened = await _notificationService.openBatteryOptimizationSettings();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          opened
+              ? 'Opened battery settings. Set Planly to Unrestricted and return to refresh.'
+              : 'Could not open battery settings on this device.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _requestExactAlarmPermission() async {
+    final granted = await _notificationService.requestExactAlarmPermission();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          granted
+              ? 'Exact alarm permission is allowed.'
+              : 'Exact alarms are still blocked. Please allow Exact alarms in app settings.',
+        ),
+      ),
+    );
+
+    await _loadNotificationHealth();
+  }
+
+  Future<void> _openAutoStartSettings() async {
+    final opened = await _notificationService.openAutoStartSettings();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          opened
+              ? 'Opened Auto-start settings. Allow Planly and return to refresh.'
+              : 'Could not open Auto-start settings on this device.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openReliabilityWizard() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const NotificationReliabilityWizardScreen(),
+      ),
+    );
+
+    if (!mounted) return;
+    await _loadNotificationHealth();
+  }
+
+  Future<void> _checkReliabilityLater() async {
+    await AppStateService.setReliabilityWizardSeen(false);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Reliability wizard will open again on next app start.'),
+      ),
+    );
   }
 
   void _loadBannerAd() {
@@ -313,6 +430,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
     final subtitleColor = isDark ? Colors.white54 : Colors.black54;
+    final notificationHealth = _androidNotificationHealth;
+    final showVivoHelp = notificationHealth?.isVivoOrIqoo ?? false;
+    final hasDeliveryRisk = notificationHealth?.hasDeliveryRisk ?? false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -439,6 +559,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 ),
+
+                if (NotificationService.isAndroidDevice) ...[
+                  const SizedBox(height: 16),
+                  _sectionTitle('Notifications', isDark),
+                  _card(
+                    isDark: isDark,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            hasDeliveryRisk
+                                ? Icons.warning_amber_rounded
+                                : Icons.verified_rounded,
+                            color: hasDeliveryRisk
+                                ? Colors.orange
+                                : (isDark ? Colors.lightGreenAccent : Colors.green),
+                          ),
+                          title: const Text('Notification Reliability Check'),
+                          subtitle: Text(
+                            _notificationHealthSummary(),
+                            style: TextStyle(fontSize: 12, color: subtitleColor),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _openBatteryOptimizationSettings,
+                              icon: const Icon(Icons.battery_saver_outlined),
+                              label: const Text('Battery Settings'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _requestExactAlarmPermission,
+                              icon: const Icon(Icons.alarm_on_outlined),
+                              label: const Text('Exact Alarm'),
+                            ),
+                            if (showVivoHelp)
+                              OutlinedButton.icon(
+                                onPressed: _openAutoStartSettings,
+                                icon: const Icon(Icons.rocket_launch_outlined),
+                                label: const Text('Auto-start'),
+                              ),
+                            OutlinedButton.icon(
+                              onPressed: _loadNotificationHealth,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Refresh'),
+                            ),
+                          ],
+                        ),
+                        if (showVivoHelp)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text(
+                              'For iQOO/vivo devices, allow Planly in Auto-start and set battery mode to Unrestricted for reliable reminders.',
+                              style: TextStyle(fontSize: 12, color: subtitleColor),
+                            ),
+                          ),
+                        const SizedBox(height: 12),
+                        Divider(
+                          height: 1,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.black.withValues(alpha: 0.06),
+                        ),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            Icons.shield_outlined,
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                          title: const Text('Reliability Wizard'),
+                          subtitle: Text(
+                            'Run guided checks now, or schedule it for next app open.',
+                            style: TextStyle(fontSize: 12, color: subtitleColor),
+                          ),
+                        ),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _openReliabilityWizard,
+                              icon: const Icon(Icons.play_circle_outline),
+                              label: const Text('Run Now'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _checkReliabilityLater,
+                              icon: const Icon(Icons.schedule_outlined),
+                              label: const Text('Check Later'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 16),
                 _sectionTitle('Support', isDark),

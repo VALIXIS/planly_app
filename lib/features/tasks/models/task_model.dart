@@ -35,6 +35,9 @@ class Task extends HiveObject {
   @HiveField(9)
   bool reminderEnabled;
 
+  @HiveField(10)
+  bool skipMissedRecurrences;
+
   Task({
     required this.title,
     this.category,
@@ -46,5 +49,6 @@ class Task extends HiveObject {
     this.reminderTime,
     this.reminderMinutesBefore,
     this.reminderEnabled = true,
+    this.skipMissedRecurrences = true,
   });
 }

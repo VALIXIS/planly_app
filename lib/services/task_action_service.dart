@@ -6,6 +6,19 @@ import 'notification_service.dart';
 class TaskActionService {
   TaskActionService._();
 
+  static const Duration _minimumNextDelay = Duration(minutes: 1);
+
+  static DateTime? _buildReminderTime(Task task) {
+    final dueDate = task.dueDate;
+    if (dueDate == null) return null;
+
+    if (task.reminderMinutesBefore != null && task.reminderMinutesBefore! > 0) {
+      return dueDate.subtract(Duration(minutes: task.reminderMinutesBefore!));
+    }
+
+    return dueDate;
+  }
+
   static Task cloneTask(
     Task task, {
     DateTime? dueDate,
@@ -22,6 +35,45 @@ class TaskActionService {
       reminderTime: null,
       reminderMinutesBefore: task.reminderMinutesBefore,
       reminderEnabled: task.reminderEnabled,
+      skipMissedRecurrences: task.skipMissedRecurrences,
+    );
+  }
+
+  static DateTime _safeFutureFromNow() {
+    return DateTime.now().add(_minimumNextDelay);
+  }
+
+  static int? _parseIntervalDays(String rule) {
+    if (!rule.startsWith('interval:')) return null;
+    final raw = rule.substring('interval:'.length).trim();
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
+  }
+
+  static DateTime _addMonthsPreservingClock(DateTime source, int monthsToAdd) {
+    final totalMonths = source.month + monthsToAdd;
+    final targetYear = source.year + ((totalMonths - 1) ~/ 12);
+    final targetMonth = ((totalMonths - 1) % 12) + 1;
+
+    final firstOfNextMonth = targetMonth == 12
+        ? DateTime(targetYear + 1, 1, 1)
+        : DateTime(targetYear, targetMonth + 1, 1);
+    final lastDayOfTargetMonth =
+        firstOfNextMonth.subtract(const Duration(days: 1)).day;
+    final targetDay = source.day <= lastDayOfTargetMonth
+        ? source.day
+        : lastDayOfTargetMonth;
+
+    return DateTime(
+      targetYear,
+      targetMonth,
+      targetDay,
+      source.hour,
+      source.minute,
+      source.second,
+      source.millisecond,
+      source.microsecond,
     );
   }
 
@@ -29,13 +81,41 @@ class TaskActionService {
     final rule = task.recurrenceRule?.toLowerCase().trim();
     final dueDate = task.dueDate;
     final currentTime = now ?? DateTime.now();
+    final skipMissed = task.skipMissedRecurrences;
 
     if (rule == null || rule.isEmpty || dueDate == null) return null;
 
+    DateTime? firstCandidate;
+    DateTime Function(DateTime current)? advance;
+
     if (rule == 'daily') {
-      var candidate = dueDate.add(const Duration(days: 1));
+      firstCandidate = dueDate.add(const Duration(days: 1));
+      advance = (current) => current.add(const Duration(days: 1));
+    } else if (rule == 'weekly') {
+      firstCandidate = dueDate.add(const Duration(days: 7));
+      advance = (current) => current.add(const Duration(days: 7));
+    } else if (rule == 'monthly') {
+      firstCandidate = _addMonthsPreservingClock(dueDate, 1);
+      advance = (current) => _addMonthsPreservingClock(current, 1);
+    } else {
+      final intervalDays = _parseIntervalDays(rule);
+      if (intervalDays != null) {
+        final interval = Duration(days: intervalDays);
+        firstCandidate = dueDate.add(interval);
+        advance = (current) => current.add(interval);
+      }
+    }
+
+    if (firstCandidate != null && advance != null) {
+      if (!skipMissed) {
+        return firstCandidate.isAfter(currentTime)
+            ? firstCandidate
+            : _safeFutureFromNow();
+      }
+
+      var candidate = firstCandidate;
       while (!candidate.isAfter(currentTime)) {
-        candidate = candidate.add(const Duration(days: 1));
+        candidate = advance(candidate);
       }
       return candidate;
     }
@@ -51,12 +131,16 @@ class TaskActionService {
       if (weekdays.isEmpty) return null;
 
       var candidate = dueDate.add(const Duration(days: 1));
-      for (var i = 0; i < 14; i++) {
+      for (var i = 0; i < 400; i++) {
         if (weekdays.contains(candidate.weekday) &&
-            candidate.isAfter(currentTime)) {
+            (skipMissed || candidate.isAfter(currentTime))) {
           return candidate;
         }
         candidate = candidate.add(const Duration(days: 1));
+      }
+
+      if (!skipMissed) {
+        return _safeFutureFromNow();
       }
     }
 
@@ -65,15 +149,15 @@ class TaskActionService {
 
   static Future<void> scheduleReminderForTask(Task task) async {
     final key = task.key;
-    final dueDate = task.dueDate;
-    if (key is! int || !task.reminderEnabled || dueDate == null) return;
+    if (key is! int || !task.reminderEnabled) return;
 
-    final reminderAt = task.reminderMinutesBefore != null &&
-            task.reminderMinutesBefore! > 0
-        ? dueDate.subtract(Duration(minutes: task.reminderMinutesBefore!))
-        : dueDate;
+    final reminderAt = _buildReminderTime(task);
+    if (reminderAt == null || !reminderAt.isAfter(DateTime.now())) {
+      await NotificationService().cancelNotification(key);
+      return;
+    }
 
-    if (!reminderAt.isAfter(DateTime.now())) return;
+    await NotificationService().cancelNotification(key);
 
     await NotificationService().scheduleNotification(
       id: key,
@@ -83,6 +167,25 @@ class TaskActionService {
           : 'Your task is due now!',
       scheduledTime: reminderAt,
     );
+  }
+
+  static Future<void> resyncAllUpcomingReminders() async {
+    final box = Hive.box<Task>('tasks');
+
+    for (final task in box.values) {
+      final key = task.key;
+      if (key is! int) continue;
+
+      final shouldHaveReminder =
+          task.reminderEnabled && !task.isCompleted && task.dueDate != null;
+
+      if (!shouldHaveReminder) {
+        await NotificationService().cancelNotification(key);
+        continue;
+      }
+
+      await scheduleReminderForTask(task);
+    }
   }
 
   static Future<Task?> createNextRecurringTask(Task completedTask) async {

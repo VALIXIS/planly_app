@@ -4,12 +4,14 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'features/tasks/models/task_model.dart';
 import 'features/tasks/ui/calendar_screen.dart';
 import 'features/tasks/ui/home_screen.dart';
+import 'features/tasks/ui/notification_reliability_wizard_screen.dart';
 import 'features/tasks/ui/onboarding_screen.dart';
 import 'features/tasks/ui/settings_screen.dart';
 import 'features/tasks/ui/splash_screen.dart';
 import 'services/admob_service.dart';
 import 'services/app_state_service.dart';
 import 'services/notification_service.dart';
+import 'services/task_action_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +24,7 @@ Future<void> main() async {
   AppStateService.loadPersistedSettings();
 
   await NotificationService().init();
+  await TaskActionService.resyncAllUpcomingReminders();
   await AdMobService.initialize();
 
   runApp(const MyApp());
@@ -221,6 +224,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int currentIndex = 0;
   late final PageController _pageController;
+  bool _reliabilityWizardCheckQueued = false;
 
   final List<Widget> screens = const [HomeScreen(), CalendarScreen()];
 
@@ -228,6 +232,30 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    _showReliabilityWizardOnceIfNeeded();
+  }
+
+  void _showReliabilityWizardOnceIfNeeded() {
+    if (!NotificationService.isAndroidDevice || _reliabilityWizardCheckQueued) {
+      return;
+    }
+
+    _reliabilityWizardCheckQueued = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || AppStateService.isReliabilityWizardSeen) return;
+
+      await AppStateService.setReliabilityWizardSeen(true);
+
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const NotificationReliabilityWizardScreen(
+            fromFirstLaunch: true,
+          ),
+        ),
+      );
+    });
   }
 
   @override

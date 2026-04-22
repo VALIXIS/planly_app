@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../../services/notification_service.dart';
+import '../../../services/task_template_service.dart';
 import '../models/task_model.dart';
 
 class AddTaskScreen extends StatefulWidget {
@@ -15,12 +16,14 @@ class AddTaskScreen extends StatefulWidget {
 }
 
 class _AddTaskScreenState extends State<AddTaskScreen> {
-    TimeOfDay? reminderTime;
+  TimeOfDay? reminderTime;
   static const Duration _minimumReminderDelay = Duration(seconds: 5);
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _controller = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _reminderMinutesController =
+      TextEditingController();
+    final TextEditingController _customIntervalController =
       TextEditingController();
 
   DateTime selectedDate = DateTime.now();
@@ -35,14 +38,25 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   String repeatType = 'None';
   final Set<int> repeatWeekdays = <int>{};
+  bool skipMissedRecurrences = true;
 
   // Removed reminderTime; only using remind before
   int? reminderMinutesBefore;
 
   final List<String> categories = ['Work', 'Personal', 'Shopping', 'Others'];
   final List<String> priorities = ['High', 'Medium', 'Low'];
-  final List<String> repeatOptions = ['None', 'Daily', 'Certain days'];
+  final List<String> repeatOptions = [
+    'None',
+    'Daily',
+    'Weekly',
+    'Monthly',
+    'Certain days',
+    'Custom interval',
+  ];
   final List<int> quickReminderOffsets = [5, 10, 30, 60];
+
+  List<TaskTemplate> _templates = [];
+  String? _selectedTemplateName;
 
   static const List<Map<String, dynamic>> weekDays = [
     {'label': 'Mon', 'value': 1},
@@ -57,6 +71,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   @override
   void initState() {
     super.initState();
+    _templates = TaskTemplateService.loadTemplates();
 
     final defaultDue = DateTime.now().add(const Duration(minutes: 15));
     selectedDate = DateTime(defaultDue.year, defaultDue.month, defaultDue.day);
@@ -82,6 +97,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           ? TimeOfDay.fromDateTime(task.reminderTime!)
           : null;
       enableReminder = task.reminderEnabled;
+      skipMissedRecurrences = task.skipMissedRecurrences;
 
       if (reminderMinutesBefore != null && reminderMinutesBefore! > 0) {
         _reminderMinutesController.text = reminderMinutesBefore.toString();
@@ -96,7 +112,97 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     _controller.dispose();
     _descController.dispose();
     _reminderMinutesController.dispose();
+    _customIntervalController.dispose();
     super.dispose();
+  }
+
+  Future<void> _reloadTemplates() async {
+    final loaded = TaskTemplateService.loadTemplates();
+    if (!mounted) return;
+    setState(() {
+      _templates = loaded;
+      if (_selectedTemplateName != null &&
+          !_templates.any((t) => t.name == _selectedTemplateName)) {
+        _selectedTemplateName = null;
+      }
+    });
+  }
+
+  void _applyTemplate(TaskTemplate template) {
+    setState(() {
+      _controller.text = template.title;
+      _descController.text = template.description;
+      selectedCategory = template.category;
+      selectedPriority = template.priority;
+      enableReminder = template.reminderEnabled;
+      reminderMinutesBefore = template.reminderMinutesBefore;
+      skipMissedRecurrences = template.skipMissedRecurrences;
+      _reminderMinutesController.text =
+          template.reminderMinutesBefore?.toString() ?? '';
+      _applyRecurrenceRule(template.recurrenceRule);
+      _selectedTemplateName = template.name;
+    });
+  }
+
+  Future<void> _saveCurrentAsTemplate() async {
+    final nameController = TextEditingController();
+    final selectedRule = _buildRecurrenceRule();
+
+    final templateName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save Template'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            hintText: 'Template name',
+          ),
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.pop(context, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, nameController.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    nameController.dispose();
+
+    if (templateName == null || templateName.isEmpty) {
+      return;
+    }
+
+    final template = TaskTemplate(
+      name: templateName,
+      title: _controller.text.trim(),
+      description: _descController.text.trim(),
+      category: selectedCategory,
+      priority: selectedPriority,
+      recurrenceRule: selectedRule,
+      reminderMinutesBefore: reminderMinutesBefore,
+      reminderEnabled: enableReminder,
+      skipMissedRecurrences: skipMissedRecurrences,
+    );
+
+    await TaskTemplateService.saveTemplate(template);
+    await _reloadTemplates();
+    _showMessage('Template "$templateName" saved');
+  }
+
+  Future<void> _deleteSelectedTemplate() async {
+    final templateName = _selectedTemplateName;
+    if (templateName == null) return;
+
+    await TaskTemplateService.deleteTemplate(templateName);
+    await _reloadTemplates();
+    _showMessage('Template "$templateName" deleted');
   }
 
   void _showMessage(String message) {
@@ -184,6 +290,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     if (rule == null || rule.isEmpty) {
       repeatType = 'None';
       repeatWeekdays.clear();
+      _customIntervalController.clear();
       return;
     }
 
@@ -192,6 +299,21 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     if (normalized == 'daily') {
       repeatType = 'Daily';
       repeatWeekdays.clear();
+      _customIntervalController.clear();
+      return;
+    }
+
+    if (normalized == 'weekly') {
+      repeatType = 'Weekly';
+      repeatWeekdays.clear();
+      _customIntervalController.clear();
+      return;
+    }
+
+    if (normalized == 'monthly') {
+      repeatType = 'Monthly';
+      repeatWeekdays.clear();
+      _customIntervalController.clear();
       return;
     }
 
@@ -206,19 +328,53 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               .whereType<int>()
               .where((d) => d >= 1 && d <= 7),
         );
+      _customIntervalController.clear();
+      return;
+    }
+
+    if (normalized.startsWith('interval:')) {
+      repeatType = 'Custom interval';
+      repeatWeekdays.clear();
+      _customIntervalController.text = normalized.substring(9).trim();
       return;
     }
 
     repeatType = 'None';
     repeatWeekdays.clear();
+    _customIntervalController.clear();
   }
 
   String? _buildRecurrenceRule() {
     if (repeatType == 'Daily') return 'daily';
+    if (repeatType == 'Weekly') return 'weekly';
+    if (repeatType == 'Monthly') return 'monthly';
 
     if (repeatType == 'Certain days' && repeatWeekdays.isNotEmpty) {
       final sorted = repeatWeekdays.toList()..sort();
       return 'days:${sorted.join(',')}';
+    }
+
+    if (repeatType == 'Custom interval') {
+      final interval = int.tryParse(_customIntervalController.text.trim());
+      if (interval != null && interval > 0) {
+        return 'interval:$interval';
+      }
+    }
+
+    return null;
+  }
+
+  String? _validateCustomInterval() {
+    if (repeatType != 'Custom interval') return null;
+
+    final raw = _customIntervalController.text.trim();
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed <= 0) {
+      return 'Enter valid days for custom interval';
+    }
+
+    if (parsed > 365) {
+      return 'Custom interval must be 365 days or less';
     }
 
     return null;
@@ -294,6 +450,12 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       return;
     }
 
+    final customIntervalError = _validateCustomInterval();
+    if (customIntervalError != null) {
+      _showMessage(customIntervalError);
+      return;
+    }
+
     final reminderAt = enableReminder ? _buildReminderScheduleTime() : null;
     if (enableReminder && reminderAt == null) {
       _showMessage(
@@ -321,6 +483,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         task.description = _descController.text.trim();
         task.priority = selectedPriority;
         task.recurrenceRule = recurrenceRule;
+        task.skipMissedRecurrences = skipMissedRecurrences;
         task.reminderEnabled = enableReminder;
         task.reminderTime = null;
         task.reminderMinutesBefore = enableReminder ? reminderMinutesBefore : null;
@@ -349,6 +512,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         description: _descController.text.trim(),
         priority: selectedPriority,
         recurrenceRule: recurrenceRule,
+        skipMissedRecurrences: skipMissedRecurrences,
         reminderEnabled: enableReminder,
         reminderTime: null,
         reminderMinutesBefore: enableReminder ? reminderMinutesBefore : null,
@@ -484,6 +648,63 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      _SectionCard(
+                        title: 'Smart Templates',
+                        icon: Icons.auto_awesome,
+                        fillColor: fieldFill,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (_templates.isEmpty)
+                              Text(
+                                'No templates yet. Save your current setup as a reusable template.',
+                                style: theme.textTheme.bodySmall,
+                              )
+                            else
+                              DropdownButtonFormField<String>(
+                                initialValue: _selectedTemplateName,
+                                decoration: fieldDecoration(
+                                  hint: 'Choose a template',
+                                  prefix: const Icon(Icons.view_module_outlined),
+                                ),
+                                items: _templates
+                                    .map(
+                                      (template) => DropdownMenuItem<String>(
+                                        value: template.name,
+                                        child: Text(template.name),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  final template = _templates.firstWhere(
+                                    (entry) => entry.name == value,
+                                  );
+                                  _applyTemplate(template);
+                                },
+                              ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _saveCurrentAsTemplate,
+                                  icon: const Icon(Icons.bookmark_add_outlined),
+                                  label: const Text('Save as Template'),
+                                ),
+                                if (_selectedTemplateName != null)
+                                  OutlinedButton.icon(
+                                    onPressed: _deleteSelectedTemplate,
+                                    icon: const Icon(Icons.delete_outline),
+                                    label: const Text('Delete Selected'),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 14),
                       _SectionCard(
                         title: 'Task Details',
@@ -594,6 +815,12 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                       if (repeatType != 'Certain days') {
                                         repeatWeekdays.clear();
                                       }
+                                      if (repeatType != 'Custom interval') {
+                                        _customIntervalController.clear();
+                                      }
+                                      if (repeatType == 'None') {
+                                        skipMissedRecurrences = true;
+                                      }
                                     });
                                   },
                                 );
@@ -622,6 +849,34 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                     },
                                   );
                                 }).toList(),
+                              ),
+                            ],
+                            if (repeatType == 'Custom interval') ...[
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                controller: _customIntervalController,
+                                keyboardType: TextInputType.number,
+                                decoration: fieldDecoration(
+                                  hint: 'Repeat every N days',
+                                  prefix: const Icon(Icons.repeat_on_outlined),
+                                ),
+                              ),
+                            ],
+                            if (repeatType != 'None') ...[
+                              const SizedBox(height: 12),
+                              SwitchListTile.adaptive(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Skip missed repeat days'),
+                                subtitle: Text(
+                                  'When enabled, recurring tasks jump to the next future slot.',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                                value: skipMissedRecurrences,
+                                onChanged: (value) {
+                                  setState(() {
+                                    skipMissedRecurrences = value;
+                                  });
+                                },
                               ),
                             ],
                           ],

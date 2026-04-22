@@ -3,12 +3,13 @@ import 'package:confetti/confetti.dart';
 import 'focus_mode_screen.dart';
 import 'package:flutter/services.dart';
 import '../../../services/app_state_service.dart';
+import '../../../services/missed_reminder_service.dart';
+import '../../../services/notification_service.dart';
 import '../../../services/task_action_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 import 'add_task_screen.dart';
-import '../../../services/notification_service.dart';
 import 'daily_reflection_screen.dart';
 import 'widgets/home_group_header.dart';
 
@@ -48,6 +49,48 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with AutomaticKeepAliveClientMixin<HomeScreen> {
+              List<MissedReminderItem> _collectMissedReminderItems() {
+                final settings = Hive.box('settings');
+                final dismissedAtMillis = settings.get(
+                  'missedReminderDismissedAt',
+                  defaultValue: 0,
+                ) as int;
+                final dismissedAt = DateTime.fromMillisecondsSinceEpoch(dismissedAtMillis);
+
+                return MissedReminderService.collectMissedReminders()
+                    .where((item) => item.dueAt.isAfter(dismissedAt))
+                    .toList();
+              }
+
+              Future<void> _dismissMissedReminderCard() async {
+                await Hive.box('settings').put(
+                  'missedReminderDismissedAt',
+                  DateTime.now().millisecondsSinceEpoch,
+                );
+                if (mounted) setState(() {});
+              }
+
+              Future<void> _markMissedItemDone(MissedReminderItem item) async {
+                final task = Hive.box<Task>('tasks').get(item.taskId);
+                if (task == null) return;
+                await TaskActionService.setTaskCompletion(task, true);
+                if (mounted) setState(() {});
+              }
+
+              Future<void> _remindMissedItemTonight(MissedReminderItem item) async {
+                final now = DateTime.now();
+                final tonight = DateTime(now.year, now.month, now.day, 20);
+                final scheduled = tonight.isAfter(DateTime.now())
+                    ? tonight
+                    : tonight.add(const Duration(days: 1));
+
+                await NotificationService().scheduleTaskReminderAt(item.taskId, scheduled);
+                if (!mounted) return;
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Reminder moved to tonight 8:00 PM')),
+                );
+              }
             // Group header icons for visual interest (moved above usage)
             IconData? _groupHeaderIcon(String group) {
               switch (group) {
@@ -460,6 +503,7 @@ class _HomeScreenState extends State<HomeScreen>
             builder: (context, Box<Task> box, _) {
           // ...existing code...
               final allTasks = box.values.toList();
+              final missedItems = _collectMissedReminderItems();
               final now = DateTime.now();
               final suggestedTask = _getSuggestedTask(allTasks);
 
@@ -574,6 +618,75 @@ class _HomeScreenState extends State<HomeScreen>
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (missedItems.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.notification_important_outlined,
+                                    size: 18,
+                                    color: Colors.orange,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'You missed ${missedItems.length} reminder(s)',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: _dismissMissedReminderCard,
+                                    icon: const Icon(Icons.close),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              ...missedItems.take(3).map(
+                                (item) => ListTile(
+                                  dense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    item.taskTitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Text(
+                                    'Missed on ${DateFormat('dd MMM, hh:mm a').format(item.dueAt)}',
+                                  ),
+                                  trailing: Wrap(
+                                    spacing: 6,
+                                    children: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            _markMissedItemDone(item),
+                                        child: const Text('Done'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            _remindMissedItemTonight(item),
+                                        child: const Text('Tonight'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   // 🎉 Confetti
                   Align(
                     alignment: Alignment.topCenter,
@@ -1099,7 +1212,10 @@ class _HomeScreenState extends State<HomeScreen>
                 duration: const Duration(seconds: 3),
                 action: SnackBarAction(
                   label: "UNDO",
-                  onPressed: () async => await box.add(deletedTask),
+                  onPressed: () async {
+                    await box.add(deletedTask);
+                    await TaskActionService.scheduleReminderForTask(deletedTask);
+                  },
                 ),
               ),
             );

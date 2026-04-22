@@ -5,6 +5,8 @@ class AppStateService {
   AppStateService._();
 
   static const Color defaultAccentColor = Color(0xFF7C4DFF);
+  static const String reliabilityWizardSeenKey =
+      'notificationReliabilityWizardSeen';
 
   static final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
@@ -45,5 +47,12 @@ class AppStateService {
 
   static Future<void> setOnboardingDone() async {
     await _settingsBox.put('onboardingDone', true);
+  }
+
+  static bool get isReliabilityWizardSeen =>
+      _settingsBox.get(reliabilityWizardSeenKey, defaultValue: false) as bool;
+
+  static Future<void> setReliabilityWizardSeen(bool value) async {
+    await _settingsBox.put(reliabilityWizardSeenKey, value);
   }
 }

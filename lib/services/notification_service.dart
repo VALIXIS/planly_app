@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:hive/hive.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -12,6 +13,12 @@ class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   static const String _notificationIcon = '@drawable/ic_planly_notification';
   static const Duration _minimumScheduleDelay = Duration(seconds: 5);
+  static const MethodChannel _deviceControlsChannel = MethodChannel(
+    'planly/device_controls',
+  );
+
+  static bool get isAndroidDevice =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   factory NotificationService() => _instance;
 
@@ -20,6 +27,67 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   AndroidScheduleMode _scheduleMode = AndroidScheduleMode.exactAllowWhileIdle;
+
+  Future<AndroidNotificationHealth?> getAndroidNotificationHealth() async {
+    if (!isAndroidDevice) return null;
+
+    try {
+      final raw = await _deviceControlsChannel
+          .invokeMethod<Map<Object?, Object?>>('getBatteryOptimizationStatus');
+      if (raw == null) return null;
+
+      return AndroidNotificationHealth.fromMap(raw);
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  Future<bool> openBatteryOptimizationSettings() async {
+    if (!isAndroidDevice) return false;
+
+    try {
+      return await _deviceControlsChannel.invokeMethod<bool>(
+            'openBatteryOptimizationSettings',
+          ) ??
+          false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  Future<bool> openAutoStartSettings() async {
+    if (!isAndroidDevice) return false;
+
+    try {
+      return await _deviceControlsChannel.invokeMethod<bool>(
+            'openAutoStartSettings',
+          ) ??
+          false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  Future<bool> requestExactAlarmPermission() async {
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    final canScheduleExactNotifications =
+        await androidPlugin?.canScheduleExactNotifications() ?? true;
+    if (canScheduleExactNotifications) {
+      _scheduleMode = AndroidScheduleMode.exactAllowWhileIdle;
+      return true;
+    }
+
+    final exactPermissionGranted =
+        await androidPlugin?.requestExactAlarmsPermission() ?? false;
+    _scheduleMode = exactPermissionGranted
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
+
+    return exactPermissionGranted;
+  }
 
   Future<Box<Task>> _taskBox() async {
     if (Hive.isBoxOpen('tasks')) {
@@ -46,6 +114,36 @@ class NotificationService {
     final minTime = now.add(_minimumScheduleDelay);
 
     return requestedTime.isBefore(minTime) ? minTime : requestedTime;
+  }
+
+  String _defaultTaskBody(Task task) {
+    final description = task.description?.trim() ?? '';
+    if (description.isNotEmpty) return description;
+    return 'Your task is due now!';
+  }
+
+  DateTime _nextTonightTime() {
+    final now = DateTime.now();
+    final tonight = DateTime(now.year, now.month, now.day, 20);
+    if (tonight.isAfter(now)) return tonight;
+    return tonight.add(const Duration(days: 1));
+  }
+
+  Future<bool> scheduleTaskReminderAt(
+    int taskId,
+    DateTime when,
+  ) async {
+    final box = await _taskBox();
+    final task = box.get(taskId);
+    if (task == null) return false;
+
+    await scheduleNotification(
+      id: taskId,
+      title: task.title,
+      body: _defaultTaskBody(task),
+      scheduledTime: when,
+    );
+    return true;
   }
 
   Future<void> snoozeNotification(int id, {int minutes = 5}) async {
@@ -80,8 +178,18 @@ class NotificationService {
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
         final id = response.id ?? 0;
 
-        if (response.actionId == 'snooze') {
-          await snoozeNotification(id, minutes: 5);
+        if (id <= 0) return;
+
+        if (response.actionId == 'snooze_10') {
+          await scheduleTaskReminderAt(
+            id,
+            DateTime.now().add(const Duration(minutes: 10)),
+          );
+          return;
+        }
+
+        if (response.actionId == 'tonight') {
+          await scheduleTaskReminderAt(id, _nextTonightTime());
           return;
         }
 
@@ -91,6 +199,7 @@ class NotificationService {
           if (task != null && !task.isCompleted) {
             task.isCompleted = true;
             await task.save();
+            await cancelNotification(id);
           }
         }
       },
@@ -101,16 +210,7 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin>();
 
     await androidPlugin?.requestNotificationsPermission();
-
-    final canScheduleExactNotifications =
-        await androidPlugin?.canScheduleExactNotifications() ?? true;
-    if (!canScheduleExactNotifications) {
-      final exactPermissionGranted =
-          await androidPlugin?.requestExactAlarmsPermission() ?? false;
-      _scheduleMode = exactPermissionGranted
-          ? AndroidScheduleMode.exactAllowWhileIdle
-          : AndroidScheduleMode.inexactAllowWhileIdle;
-    }
+    await requestExactAlarmPermission();
   }
 
   Future<void> scheduleNotification({
@@ -147,8 +247,13 @@ class NotificationService {
       ),
       actions: const <AndroidNotificationAction>[
         AndroidNotificationAction(
-          'snooze',
-          'Snooze 5 min',
+          'snooze_10',
+          'Snooze 10 min',
+          showsUserInterface: true,
+        ),
+        AndroidNotificationAction(
+          'tonight',
+          'Tonight 8 PM',
           showsUserInterface: true,
         ),
         AndroidNotificationAction(
@@ -162,17 +267,30 @@ class NotificationService {
 
     final resolvedScheduleTime = _scheduleAt(scheduledTime);
 
-    await _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      resolvedScheduleTime,
-      NotificationDetails(android: androidDetails),
-      androidScheduleMode: _scheduleMode,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
+    Future<void> doSchedule(AndroidScheduleMode mode) {
+      return _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        resolvedScheduleTime,
+        NotificationDetails(android: androidDetails),
+        androidScheduleMode: mode,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
 
+    try {
+      await doSchedule(_scheduleMode);
+    } on PlatformException catch (error) {
+      if (error.code == 'exact_alarms_not_permitted' &&
+          _scheduleMode == AndroidScheduleMode.exactAllowWhileIdle) {
+        _scheduleMode = AndroidScheduleMode.inexactAllowWhileIdle;
+        await doSchedule(_scheduleMode);
+        return;
+      }
+      rethrow;
+    }
   }
 
   Future<void> cancelNotification(int id) async {
@@ -181,5 +299,77 @@ class NotificationService {
 
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
+  }
+}
+
+class AndroidNotificationHealth {
+  final bool isIgnoringBatteryOptimizations;
+  final bool isPowerSaveModeEnabled;
+  final bool canScheduleExactAlarms;
+  final String manufacturer;
+  final String brand;
+  final String model;
+
+  const AndroidNotificationHealth({
+    required this.isIgnoringBatteryOptimizations,
+    required this.isPowerSaveModeEnabled,
+    required this.canScheduleExactAlarms,
+    required this.manufacturer,
+    required this.brand,
+    required this.model,
+  });
+
+  factory AndroidNotificationHealth.fromMap(Map<Object?, Object?> raw) {
+    bool readBool(String key, {required bool fallback}) {
+      final value = raw[key];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        return value.toLowerCase() == 'true' || value == '1';
+      }
+      return fallback;
+    }
+
+    String readString(String key) {
+      final value = raw[key];
+      return value == null ? '' : value.toString();
+    }
+
+    return AndroidNotificationHealth(
+      isIgnoringBatteryOptimizations: readBool(
+        'isIgnoringBatteryOptimizations',
+        fallback: true,
+      ),
+      isPowerSaveModeEnabled: readBool(
+        'isPowerSaveModeEnabled',
+        fallback: false,
+      ),
+      canScheduleExactAlarms: readBool(
+        'canScheduleExactAlarms',
+        fallback: true,
+      ),
+      manufacturer: readString('manufacturer'),
+      brand: readString('brand'),
+      model: readString('model'),
+    );
+  }
+
+  bool get hasDeliveryRisk =>
+      !isIgnoringBatteryOptimizations ||
+      isPowerSaveModeEnabled ||
+      !canScheduleExactAlarms;
+
+  bool get isVivoOrIqoo {
+    final deviceInfo =
+        '${manufacturer.toLowerCase()} ${brand.toLowerCase()} ${model.toLowerCase()}';
+    return deviceInfo.contains('vivo') || deviceInfo.contains('iqoo');
+  }
+
+  String get deviceLabel {
+    final parts = [brand.trim(), model.trim()]
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'Android device';
+    return parts.join(' ');
   }
 }
