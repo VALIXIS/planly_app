@@ -1,10 +1,9 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../../services/app_state_service.dart';
-import '../../../services/admob_service.dart';
 import '../../../services/notification_service.dart';
+import '../../common/widgets/reliable_banner_ad.dart';
 import '../models/task_model.dart';
 import 'feedback_screen.dart';
 import 'notification_reliability_wizard_screen.dart';
@@ -33,8 +32,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     {'label': 'Midnight', 'color': const Color(0xFF1C1C3A)},
   ];
 
-  BannerAd? _bannerAd;
-  bool _isBannerLoaded = false;
   final NotificationService _notificationService = NotificationService();
 
   AndroidNotificationHealth? _androidNotificationHealth;
@@ -57,7 +54,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadBannerAd();
     _loadNotificationHealth();
   }
 
@@ -170,38 +166,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Text('Reliability wizard will open again on next app start.'),
       ),
     );
-  }
-
-  void _loadBannerAd() {
-    _bannerAd?.dispose();
-    _bannerAd = null;
-    _isBannerLoaded = false;
-
-    if (!AdMobService.isSupportedPlatform) {
-      if (mounted) setState(() {});
-      return;
-    }
-
-    _bannerAd = BannerAd(
-      adUnitId: AdMobService.bannerAdUnitId,
-      size: AdSize.banner,
-      request: AdMobService.buildBannerRequest(),
-      listener: BannerAdListener(
-        onAdLoaded: (_) {
-          if (mounted) setState(() => _isBannerLoaded = true);
-        },
-        onAdFailedToLoad: (ad, _) {
-          ad.dispose();
-          if (mounted) setState(() => _isBannerLoaded = false);
-        },
-      ),
-    )..load();
-  }
-
-  @override
-  void dispose() {
-    _bannerAd?.dispose();
-    super.dispose();
   }
 
   void _saveSetting(String key, dynamic value) {
@@ -755,35 +719,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          if (AdMobService.isSupportedPlatform)
-            Container(
-              padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.06)
-                        : Colors.black.withValues(alpha: 0.06),
-                  ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.black.withValues(alpha: 0.06),
                 ),
               ),
-              child: Column(
-                children: [
-                  Text(
-                    'Support Planly',
-                    style: TextStyle(fontSize: 11, color: subtitleColor),
-                  ),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    width: AdSize.banner.width.toDouble(),
-                    height: AdSize.banner.height.toDouble(),
-                    child: _isBannerLoaded && _bannerAd != null
-                        ? AdWidget(ad: _bannerAd!)
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
             ),
+            child: Column(
+              children: [
+                ReliableBannerAd(adUnitId: 'ca-app-pub-6059224677913709/7889542039'),
+              ],
+            ),
+          ),
         ],
       ),
     );

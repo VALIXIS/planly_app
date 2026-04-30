@@ -3,7 +3,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../../services/notification_service.dart';
-import '../../../services/task_template_service.dart';
 import '../models/task_model.dart';
 
 class AddTaskScreen extends StatefulWidget {
@@ -23,7 +22,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _reminderMinutesController =
       TextEditingController();
-    final TextEditingController _customIntervalController =
+  final TextEditingController _customIntervalController =
       TextEditingController();
 
   DateTime selectedDate = DateTime.now();
@@ -55,9 +54,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   ];
   final List<int> quickReminderOffsets = [5, 10, 30, 60];
 
-  List<TaskTemplate> _templates = [];
-  String? _selectedTemplateName;
-
   static const List<Map<String, dynamic>> weekDays = [
     {'label': 'Mon', 'value': 1},
     {'label': 'Tue', 'value': 2},
@@ -71,7 +67,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   @override
   void initState() {
     super.initState();
-    _templates = TaskTemplateService.loadTemplates();
 
     final defaultDue = DateTime.now().add(const Duration(minutes: 15));
     selectedDate = DateTime(defaultDue.year, defaultDue.month, defaultDue.day);
@@ -114,95 +109,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     _reminderMinutesController.dispose();
     _customIntervalController.dispose();
     super.dispose();
-  }
-
-  Future<void> _reloadTemplates() async {
-    final loaded = TaskTemplateService.loadTemplates();
-    if (!mounted) return;
-    setState(() {
-      _templates = loaded;
-      if (_selectedTemplateName != null &&
-          !_templates.any((t) => t.name == _selectedTemplateName)) {
-        _selectedTemplateName = null;
-      }
-    });
-  }
-
-  void _applyTemplate(TaskTemplate template) {
-    setState(() {
-      _controller.text = template.title;
-      _descController.text = template.description;
-      selectedCategory = template.category;
-      selectedPriority = template.priority;
-      enableReminder = template.reminderEnabled;
-      reminderMinutesBefore = template.reminderMinutesBefore;
-      skipMissedRecurrences = template.skipMissedRecurrences;
-      _reminderMinutesController.text =
-          template.reminderMinutesBefore?.toString() ?? '';
-      _applyRecurrenceRule(template.recurrenceRule);
-      _selectedTemplateName = template.name;
-    });
-  }
-
-  Future<void> _saveCurrentAsTemplate() async {
-    final nameController = TextEditingController();
-    final selectedRule = _buildRecurrenceRule();
-
-    final templateName = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Save Template'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            hintText: 'Template name',
-          ),
-          textInputAction: TextInputAction.done,
-          onSubmitted: (value) => Navigator.pop(context, value.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, nameController.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-
-    nameController.dispose();
-
-    if (templateName == null || templateName.isEmpty) {
-      return;
-    }
-
-    final template = TaskTemplate(
-      name: templateName,
-      title: _controller.text.trim(),
-      description: _descController.text.trim(),
-      category: selectedCategory,
-      priority: selectedPriority,
-      recurrenceRule: selectedRule,
-      reminderMinutesBefore: reminderMinutesBefore,
-      reminderEnabled: enableReminder,
-      skipMissedRecurrences: skipMissedRecurrences,
-    );
-
-    await TaskTemplateService.saveTemplate(template);
-    await _reloadTemplates();
-    _showMessage('Template "$templateName" saved');
-  }
-
-  Future<void> _deleteSelectedTemplate() async {
-    final templateName = _selectedTemplateName;
-    if (templateName == null) return;
-
-    await TaskTemplateService.deleteTemplate(templateName);
-    await _reloadTemplates();
-    _showMessage('Template "$templateName" deleted');
   }
 
   void _showMessage(String message) {
@@ -644,63 +550,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: colorScheme.onSurfaceVariant,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _SectionCard(
-                        title: 'Smart Templates',
-                        icon: Icons.auto_awesome,
-                        fillColor: fieldFill,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (_templates.isEmpty)
-                              Text(
-                                'No templates yet. Save your current setup as a reusable template.',
-                                style: theme.textTheme.bodySmall,
-                              )
-                            else
-                              DropdownButtonFormField<String>(
-                                initialValue: _selectedTemplateName,
-                                decoration: fieldDecoration(
-                                  hint: 'Choose a template',
-                                  prefix: const Icon(Icons.view_module_outlined),
-                                ),
-                                items: _templates
-                                    .map(
-                                      (template) => DropdownMenuItem<String>(
-                                        value: template.name,
-                                        child: Text(template.name),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) {
-                                  if (value == null) return;
-                                  final template = _templates.firstWhere(
-                                    (entry) => entry.name == value,
-                                  );
-                                  _applyTemplate(template);
-                                },
-                              ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed: _saveCurrentAsTemplate,
-                                  icon: const Icon(Icons.bookmark_add_outlined),
-                                  label: const Text('Save as Template'),
-                                ),
-                                if (_selectedTemplateName != null)
-                                  OutlinedButton.icon(
-                                    onPressed: _deleteSelectedTemplate,
-                                    icon: const Icon(Icons.delete_outline),
-                                    label: const Text('Delete Selected'),
-                                  ),
-                              ],
                             ),
                           ],
                         ),

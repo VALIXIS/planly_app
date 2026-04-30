@@ -2,7 +2,7 @@ name: planly
 description: "Planly is a Flutter task planner with reminders, calendar views, focus mode, and daily reflection."
 publish_to: 'none'
 
-version: 1.0.1+2
+version: 1.0.1+4
 
 environment:
   sdk: ">=3.10.0 <4.0.0"

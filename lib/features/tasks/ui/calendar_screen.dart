@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-import '../../../services/admob_service.dart';
+import '../../common/widgets/reliable_banner_ad.dart';
 import '../models/task_model.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -18,53 +17,6 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen>
     with AutomaticKeepAliveClientMixin<CalendarScreen> {
   DateTime selectedDay = DateTime.now();
-
-  BannerAd? _bannerAd;
-  bool _isBannerLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadBannerAd();
-  }
-
-  void _loadBannerAd() {
-    _bannerAd?.dispose();
-    _bannerAd = null;
-    _isBannerLoaded = false;
-
-    if (!AdMobService.isSupportedPlatform) {
-      if (mounted) {
-        setState(() {});
-      }
-      return;
-    }
-
-    _bannerAd = BannerAd(
-      adUnitId: AdMobService.bannerAdUnitId,
-      size: AdSize.banner,
-      request: AdMobService.buildBannerRequest(),
-      listener: BannerAdListener(
-        onAdLoaded: (_) {
-          if (mounted) {
-            setState(() => _isBannerLoaded = true);
-          }
-        },
-        onAdFailedToLoad: (ad, _) {
-          ad.dispose();
-          if (mounted) {
-            setState(() => _isBannerLoaded = false);
-          }
-        },
-      ),
-    )..load();
-  }
-
-  @override
-  void dispose() {
-    _bannerAd?.dispose();
-    super.dispose();
-  }
 
   DateTime _dayKey(DateTime date) {
     return DateTime(date.year, date.month, date.day);
@@ -244,14 +196,7 @@ class _CalendarScreenState extends State<CalendarScreen>
               ),
             ),
             ),
-            if (AdMobService.isSupportedPlatform)
-              SizedBox(
-                width: AdSize.banner.width.toDouble(),
-                height: AdSize.banner.height.toDouble(),
-                child: _isBannerLoaded && _bannerAd != null
-                    ? AdWidget(ad: _bannerAd!)
-                    : const SizedBox.shrink(),
-              ),
+            ReliableBannerAd(adUnitId: 'ca-app-pub-6059224677913709/5151958786'),
           ],
         ),
       ),
