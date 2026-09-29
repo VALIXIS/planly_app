@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 import 'add_task_screen.dart';
 import 'daily_reflection_screen.dart';
+import 'task_search_delegate.dart';
 import 'widgets/home_group_header.dart';
 
 // ─────────────────────────────────────────────────────
@@ -966,32 +967,10 @@ class _HomeScreenState extends State<HomeScreen>
                           color: isDark ? Colors.white70 : Colors.black54,
                           tooltip: "Search tasks",
                           onPressed: () async {
-                            final result = await showDialog<String>(
+                            await showSearch(
                               context: context,
-                              builder: (context) {
-                                String tempQuery = searchQuery;
-                                return AlertDialog(
-                                  title: const Text("Search Tasks"),
-                                  content: TextField(
-                                    autofocus: true,
-                                    decoration: const InputDecoration(hintText: "Type to search..."),
-                                    onChanged: (val) => tempQuery = val,
-                                    controller: TextEditingController(text: searchQuery),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context, null),
-                                      child: const Text("Cancel"),
-                                    ),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context, tempQuery),
-                                      child: const Text("Search"),
-                                    ),
-                                  ],
-                                );
-                              },
+                              delegate: TaskSearchDelegate(),
                             );
-                            if (result != null) setState(() => searchQuery = result);
                           },
                         ),
                       ],
@@ -1007,7 +986,6 @@ class _HomeScreenState extends State<HomeScreen>
                               '${selectedFilter.name}-$searchQuery',
                             ),
                             padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-                            cacheExtent: 800,
                             itemCount: taskRows.length,
                             itemBuilder: (context, index) {
                               final row = taskRows[index];
@@ -1383,6 +1361,32 @@ class _HomeScreenState extends State<HomeScreen>
                                       fontSize: 12,
                                       color: Colors.grey.shade500,
                                     ),
+                                  ),
+                                ),
+                              if (task.tags.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Wrap(
+                                    spacing: 4,
+                                    runSpacing: 2,
+                                    children: task.tags.map((tag) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: primary.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        '#$tag',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: primary,
+                                        ),
+                                      ),
+                                    )).toList(),
                                   ),
                                 ),
                             ],
