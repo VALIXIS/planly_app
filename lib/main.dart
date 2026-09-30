@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -18,6 +19,7 @@ Future<void> main() async {
 
   await Hive.initFlutter();
   Hive.registerAdapter(TaskAdapter());
+  Hive.registerAdapter(TaskSubtaskAdapter());
   await Hive.openBox<Task>('tasks');
   await Hive.openBox('settings');
 

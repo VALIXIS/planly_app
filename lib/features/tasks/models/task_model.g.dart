@@ -22,19 +22,20 @@ class TaskAdapter extends TypeAdapter<Task> {
       dueDate: fields[2] as DateTime?,
       isCompleted: fields[3] as bool,
       description: fields[4] as String?,
-      priority: (fields[5] as String?) ?? 'Medium',
+      priority: fields[5] as String,
       recurrenceRule: fields[6] as String?,
       reminderTime: fields[7] as DateTime?,
       reminderMinutesBefore: fields[8] as int?,
-      reminderEnabled: (fields[9] as bool?) ?? true,
-      skipMissedRecurrences: (fields[10] as bool?) ?? true,
+      reminderEnabled: fields[9] as bool,
+      skipMissedRecurrences: fields[10] as bool,
+      subtasks: (fields[11] as List?)?.cast<TaskSubtask>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, Task obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.title)
       ..writeByte(1)
@@ -56,7 +57,9 @@ class TaskAdapter extends TypeAdapter<Task> {
       ..writeByte(9)
       ..write(obj.reminderEnabled)
       ..writeByte(10)
-      ..write(obj.skipMissedRecurrences);
+      ..write(obj.skipMissedRecurrences)
+      ..writeByte(11)
+      ..write(obj.subtasks);
   }
 
   @override
@@ -66,6 +69,46 @@ class TaskAdapter extends TypeAdapter<Task> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is TaskAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class TaskSubtaskAdapter extends TypeAdapter<TaskSubtask> {
+  @override
+  final int typeId = 1;
+
+  @override
+  TaskSubtask read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return TaskSubtask(
+      title: fields[0] as String,
+      minutes: fields[1] as int,
+      isCompleted: fields[2] as bool,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, TaskSubtask obj) {
+    writer
+      ..writeByte(3)
+      ..writeByte(0)
+      ..write(obj.title)
+      ..writeByte(1)
+      ..write(obj.minutes)
+      ..writeByte(2)
+      ..write(obj.isCompleted);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaskSubtaskAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

@@ -1371,6 +1371,29 @@ class _HomeScreenState extends State<HomeScreen>
                                     ),
                                   ],
                                 ),
+                              if (task.subtasks != null &&
+                                  task.subtasks!.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.checklist_rounded,
+                                        size: 11,
+                                        color: Colors.grey.shade500,
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '${task.subtasks!.where((s) => s.isCompleted).length}/${task.subtasks!.length} subtasks',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               if (task.description != null &&
                                   task.description!.isNotEmpty)
                                 Padding(

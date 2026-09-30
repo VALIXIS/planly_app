@@ -20,6 +20,7 @@ val isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
 
 android {
     namespace = "com.js.planly"
+    ndkVersion = "28.2.13676358"
 
     // ✅ Fix 1: Raised to 36 (required by path_provider_android)
     compileSdk = 36
