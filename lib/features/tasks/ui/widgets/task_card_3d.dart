@@ -841,6 +841,31 @@ class _TaskCard3DState extends State<TaskCard3D>
             ),
           ),
         ],
+        if (widget.task.tags.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Wrap(
+            spacing: 4,
+            runSpacing: 2,
+            children: widget.task.tags.map((tag) => Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 5,
+                vertical: 1,
+              ),
+              decoration: BoxDecoration(
+                color: widget.primary.withValues(alpha: isDark ? 0.16 : 0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '#$tag',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: widget.primary,
+                ),
+              ),
+            )).toList(),
+          ),
+        ],
       ],
     );
   }

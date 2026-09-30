@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 import 'add_task_screen.dart';
 import 'daily_reflection_screen.dart';
+import 'task_search_delegate.dart';
 import 'widgets/home_group_header.dart';
 import 'widgets/task_card_3d.dart';
 
@@ -967,32 +968,10 @@ class _HomeScreenState extends State<HomeScreen>
                           color: isDark ? Colors.white70 : Colors.black54,
                           tooltip: "Search tasks",
                           onPressed: () async {
-                            final result = await showDialog<String>(
+                            await showSearch(
                               context: context,
-                              builder: (context) {
-                                String tempQuery = searchQuery;
-                                return AlertDialog(
-                                  title: const Text("Search Tasks"),
-                                  content: TextField(
-                                    autofocus: true,
-                                    decoration: const InputDecoration(hintText: "Type to search..."),
-                                    onChanged: (val) => tempQuery = val,
-                                    controller: TextEditingController(text: searchQuery),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context, null),
-                                      child: const Text("Cancel"),
-                                    ),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context, tempQuery),
-                                      child: const Text("Search"),
-                                    ),
-                                  ],
-                                );
-                              },
+                              delegate: TaskSearchDelegate(),
                             );
-                            if (result != null) setState(() => searchQuery = result);
                           },
                         ),
                       ],

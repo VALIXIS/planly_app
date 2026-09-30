@@ -28,13 +28,14 @@ class TaskAdapter extends TypeAdapter<Task> {
       reminderMinutesBefore: fields[8] as int?,
       reminderEnabled: (fields[9] as bool?) ?? true,
       skipMissedRecurrences: (fields[10] as bool?) ?? true,
+      tags: (fields[11] as List?)?.cast<String>() ?? const [],
     );
   }
 
   @override
   void write(BinaryWriter writer, Task obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.title)
       ..writeByte(1)
@@ -56,7 +57,9 @@ class TaskAdapter extends TypeAdapter<Task> {
       ..writeByte(9)
       ..write(obj.reminderEnabled)
       ..writeByte(10)
-      ..write(obj.skipMissedRecurrences);
+      ..write(obj.skipMissedRecurrences)
+      ..writeByte(11)
+      ..write(obj.tags);
   }
 
   @override
