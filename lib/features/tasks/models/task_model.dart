@@ -39,6 +39,9 @@ class Task extends HiveObject {
   bool skipMissedRecurrences;
 
   @HiveField(11)
+  List<String> tags;
+
+  @HiveField(12)
   List<TaskSubtask>? subtasks;
 
   Task({
@@ -53,11 +56,12 @@ class Task extends HiveObject {
     this.reminderMinutesBefore,
     this.reminderEnabled = true,
     this.skipMissedRecurrences = true,
+    this.tags = const [],
     this.subtasks,
   });
 }
 
-@HiveType(typeId: 1)
+@HiveType(typeId: 2)
 class TaskSubtask extends HiveObject {
   @HiveField(0)
   String title;

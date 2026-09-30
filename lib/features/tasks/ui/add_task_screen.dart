@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../services/ai_task_planner_service.dart';
 import '../../../services/notification_service.dart';
+import '../models/tag_model.dart';
 import '../models/task_model.dart';
 
 class AddTaskScreen extends StatefulWidget {
@@ -36,6 +37,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   String selectedCategory = 'Personal';
   String selectedPriority = 'Medium';
+  List<String> selectedTags = [];
 
   String repeatType = 'None';
   final Set<int> repeatWeekdays = <int>{};
@@ -90,6 +92,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       selectedCategory = task.category ?? 'Personal';
       _descController.text = task.description ?? '';
       selectedPriority = task.priority;
+      selectedTags = List<String>.from(task.tags);
 
       if (task.dueDate != null) {
         selectedDate = task.dueDate!;
@@ -560,6 +563,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         task.dueDate = combinedDateTime;
         task.description = _descController.text.trim();
         task.priority = selectedPriority;
+        task.tags = selectedTags;
         task.recurrenceRule = recurrenceRule;
         task.skipMissedRecurrences = skipMissedRecurrences;
         task.reminderEnabled = enableReminder;
@@ -590,6 +594,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         isCompleted: false,
         description: _descController.text.trim(),
         priority: selectedPriority,
+        tags: selectedTags,
         recurrenceRule: recurrenceRule,
         skipMissedRecurrences: skipMissedRecurrences,
         reminderEnabled: enableReminder,
@@ -1349,6 +1354,115 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                               }).toList(),
                             ),
                           ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _SectionCard(
+                        title: 'Tags',
+                        icon: Icons.label_outlined,
+                        fillColor: fieldFill,
+                        child: ValueListenableBuilder(
+                          valueListenable:
+                              Hive.box<TagModel>('tags').listenable(),
+                          builder: (context, Box<TagModel> box, _) {
+                            final tags = box.values.toList();
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    ...tags.map((tagObj) {
+                                      final name = tagObj.name;
+                                      final isSelected =
+                                          selectedTags.contains(name);
+                                      return FilterChip(
+                                        avatar:
+                                            const Icon(Icons.tag, size: 14),
+                                        label: Text('#$name'),
+                                        selected: isSelected,
+                                        onSelected: (selected) {
+                                          setState(() {
+                                            if (selected) {
+                                              selectedTags.add(name);
+                                            } else {
+                                              selectedTags.remove(name);
+                                            }
+                                          });
+                                        },
+                                      );
+                                    }),
+                                    ActionChip(
+                                      avatar: const Icon(Icons.add, size: 14),
+                                      label: const Text('Add Tag'),
+                                      onPressed: () async {
+                                        final controller =
+                                            TextEditingController();
+                                        final newTag = await showDialog<String>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text(
+                                              'Create Custom Tag',
+                                            ),
+                                            content: TextField(
+                                              controller: controller,
+                                              autofocus: true,
+                                              decoration:
+                                                  const InputDecoration(
+                                                hintText: 'e.g. work or urgent',
+                                                prefixText: '#',
+                                              ),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(
+                                                  ctx,
+                                                  controller.text.trim(),
+                                                ),
+                                                child: const Text('Create'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                        if (newTag != null &&
+                                            newTag.isNotEmpty) {
+                                          final cleanName = newTag
+                                              .replaceAll('#', '')
+                                              .trim()
+                                              .toLowerCase();
+                                          if (cleanName.isNotEmpty) {
+                                            final existing = box.values.any(
+                                              (t) =>
+                                                  t.name.toLowerCase() ==
+                                                  cleanName,
+                                            );
+                                            if (!existing) {
+                                              await box.add(
+                                                TagModel(name: cleanName),
+                                              );
+                                            }
+                                            setState(() {
+                                              if (!selectedTags
+                                                  .contains(cleanName)) {
+                                                selectedTags.add(cleanName);
+                                              }
+                                            });
+                                          }
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ),
                     ],

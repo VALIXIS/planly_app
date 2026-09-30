@@ -25,17 +25,17 @@ class TaskAdapter extends TypeAdapter<Task> {
       priority: fields[5] as String,
       recurrenceRule: fields[6] as String?,
       reminderTime: fields[7] as DateTime?,
-      reminderMinutesBefore: fields[8] as int?,
-      reminderEnabled: fields[9] as bool,
-      skipMissedRecurrences: fields[10] as bool,
-      subtasks: (fields[11] as List?)?.cast<TaskSubtask>(),
+      reminderEnabled: (fields[9] as bool?) ?? true,
+      skipMissedRecurrences: (fields[10] as bool?) ?? true,
+      tags: (fields[11] as List?)?.cast<String>() ?? const [],
+      subtasks: (fields[12] as List?)?.cast<TaskSubtask>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, Task obj) {
     writer
-      ..writeByte(12)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.title)
       ..writeByte(1)
@@ -59,6 +59,8 @@ class TaskAdapter extends TypeAdapter<Task> {
       ..writeByte(10)
       ..write(obj.skipMissedRecurrences)
       ..writeByte(11)
+      ..write(obj.tags)
+      ..writeByte(12)
       ..write(obj.subtasks);
   }
 
@@ -75,7 +77,7 @@ class TaskAdapter extends TypeAdapter<Task> {
 
 class TaskSubtaskAdapter extends TypeAdapter<TaskSubtask> {
   @override
-  final int typeId = 1;
+  final int typeId = 2;
 
   @override
   TaskSubtask read(BinaryReader reader) {
