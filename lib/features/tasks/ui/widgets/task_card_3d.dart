@@ -741,6 +741,7 @@ class _TaskCard3DState extends State<TaskCard3D>
 
     final isCompleted = widget.task.isCompleted;
     return GestureDetector(
+      key: const ValueKey('task_card_checkbox'),
       behavior: HitTestBehavior.opaque,
       onTap: () {
         HapticFeedback.lightImpact();
