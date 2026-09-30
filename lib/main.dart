@@ -1,6 +1,8 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'features/tasks/models/tag_model.dart';
 import 'features/tasks/models/task_model.dart';
 import 'features/tasks/ui/calendar_screen.dart';
 import 'features/tasks/ui/home_screen.dart';
@@ -18,7 +20,16 @@ Future<void> main() async {
 
   await Hive.initFlutter();
   Hive.registerAdapter(TaskAdapter());
+  Hive.registerAdapter(TagModelAdapter());
   await Hive.openBox<Task>('tasks');
+  final tagBox = await Hive.openBox<TagModel>('tags');
+  if (tagBox.isEmpty) {
+    await tagBox.addAll([
+      TagModel(name: 'work', colorValue: 0xFF42A5F5),
+      TagModel(name: 'personal', colorValue: 0xFF66BB6A),
+      TagModel(name: 'urgent', colorValue: 0xFFEF5350),
+    ]);
+  }
   await Hive.openBox('settings');
 
   AppStateService.loadPersistedSettings();
