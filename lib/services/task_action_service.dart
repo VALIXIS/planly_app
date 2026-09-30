@@ -36,6 +36,15 @@ class TaskActionService {
       reminderMinutesBefore: task.reminderMinutesBefore,
       reminderEnabled: task.reminderEnabled,
       skipMissedRecurrences: task.skipMissedRecurrences,
+      subtasks: task.subtasks
+          ?.map(
+            (s) => TaskSubtask(
+              title: s.title,
+              minutes: s.minutes,
+              isCompleted: false,
+            ),
+          )
+          .toList(),
     );
   }
 

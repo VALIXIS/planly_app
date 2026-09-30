@@ -32,6 +32,9 @@ dependencies:
   # External links and email intents
   url_launcher: ^6.3.1
 
+  # HTTP client for API requests
+  http: ^1.2.0
+
   # 🎉 Confetti animation
   confetti: ^0.8.0
 

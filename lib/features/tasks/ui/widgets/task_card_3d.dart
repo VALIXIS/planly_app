@@ -841,6 +841,27 @@ class _TaskCard3DState extends State<TaskCard3D>
             ),
           ),
         ],
+        if (widget.task.subtasks != null && widget.task.subtasks!.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.checklist_rounded,
+                size: 11,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+              ),
+              const SizedBox(width: 3),
+              Text(
+                '${widget.task.subtasks!.where((s) => s.isCompleted).length}/${widget.task.subtasks!.length} subtasks',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ],
         if (widget.task.tags.isNotEmpty) ...[
           const SizedBox(height: 3),
           Wrap(

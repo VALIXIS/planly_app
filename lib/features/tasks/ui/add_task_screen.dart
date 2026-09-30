@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
+import '../../../services/ai_task_planner_service.dart';
 import '../../../services/notification_service.dart';
 import '../models/tag_model.dart';
 import '../models/task_model.dart';
@@ -43,6 +45,13 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   // Removed reminderTime; only using remind before
   int? reminderMinutesBefore;
+
+  List<TaskSubtask> _subtasks = [];
+  List<TaskSubtask> _aiGeneratedSubtasks = [];
+  bool _isDeconstructing = false;
+  bool _subtasksAccepted = false;
+  String? _aiError;
+  StreamSubscription<List<TaskSubtask>>? _aiSubscription;
 
   final List<String> categories = ['Work', 'Personal', 'Shopping', 'Others'];
   final List<String> priorities = ['High', 'Medium', 'Low'];
@@ -97,6 +106,18 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       enableReminder = task.reminderEnabled;
       skipMissedRecurrences = task.skipMissedRecurrences;
 
+      if (task.subtasks != null) {
+        _subtasks = task.subtasks!
+            .map(
+              (s) => TaskSubtask(
+                title: s.title,
+                minutes: s.minutes,
+                isCompleted: s.isCompleted,
+              ),
+            )
+            .toList();
+      }
+
       if (reminderMinutesBefore != null && reminderMinutesBefore! > 0) {
         _reminderMinutesController.text = reminderMinutesBefore.toString();
       }
@@ -107,11 +128,162 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   @override
   void dispose() {
+    _aiSubscription?.cancel();
     _controller.dispose();
     _descController.dispose();
     _reminderMinutesController.dispose();
     _customIntervalController.dispose();
     super.dispose();
+  }
+
+  Future<void> _deconstructTaskWithAi() async {
+    final title = _controller.text.trim();
+    if (title.isEmpty) {
+      _showMessage('Enter a task title first.');
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+
+    await _aiSubscription?.cancel();
+
+    setState(() {
+      _isDeconstructing = true;
+      _aiError = null;
+      _aiGeneratedSubtasks = [];
+      _subtasksAccepted = false;
+    });
+
+    final service = AiTaskPlannerService();
+
+    try {
+      final stream = service.deconstructTaskStream(title);
+      _aiSubscription = stream.listen(
+        (subtasks) {
+          if (mounted) {
+            setState(() {
+              _aiGeneratedSubtasks = subtasks;
+            });
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            final msg = error is AiTaskPlannerException
+                ? error.message
+                : 'AI task generation failed. Please try again.';
+            setState(() {
+              _isDeconstructing = false;
+              _aiError = msg;
+            });
+            _showMessage(msg);
+          }
+        },
+        onDone: () {
+          if (mounted) {
+            setState(() {
+              _isDeconstructing = false;
+            });
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        final msg = e is AiTaskPlannerException
+            ? e.message
+            : 'AI task generation failed. Please try again.';
+        setState(() {
+          _isDeconstructing = false;
+          _aiError = msg;
+        });
+        _showMessage(msg);
+      }
+    }
+  }
+
+  void _acceptAllSubtasks() {
+    if (_aiGeneratedSubtasks.isEmpty) return;
+
+    setState(() {
+      for (final genItem in _aiGeneratedSubtasks) {
+        final exists = _subtasks.any(
+          (item) =>
+              item.title.trim().toLowerCase() ==
+              genItem.title.trim().toLowerCase(),
+        );
+        if (!exists) {
+          _subtasks.add(
+            TaskSubtask(
+              title: genItem.title,
+              minutes: genItem.minutes,
+              isCompleted: false,
+            ),
+          );
+        }
+      }
+      _subtasksAccepted = true;
+    });
+    _showMessage('Subtasks added to checklist.');
+  }
+
+  Future<void> _showAddManualSubtaskDialog() async {
+    final titleController = TextEditingController();
+    final minutesController = TextEditingController(text: '15');
+
+    final result = await showDialog<TaskSubtask>(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          title: const Text('Add Subtask'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Subtask Title',
+                  hintText: 'e.g. Read chapter 1',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: minutesController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Estimated Minutes',
+                  hintText: 'e.g. 15',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final t = titleController.text.trim();
+                final m = int.tryParse(minutesController.text.trim());
+                if (t.isNotEmpty && m != null && m > 0) {
+                  Navigator.pop(
+                    dialogCtx,
+                    TaskSubtask(title: t, minutes: m),
+                  );
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _subtasks.add(result);
+      });
+    }
   }
 
   void _showMessage(String message) {
@@ -397,6 +569,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         task.reminderEnabled = enableReminder;
         task.reminderTime = null;
         task.reminderMinutesBefore = enableReminder ? reminderMinutesBefore : null;
+        task.subtasks = _subtasks.isNotEmpty ? _subtasks : null;
         await task.save();
 
         if (enableReminder && reminderAt != null) {
@@ -427,6 +600,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         reminderEnabled: enableReminder,
         reminderTime: null,
         reminderMinutesBefore: enableReminder ? reminderMinutesBefore : null,
+        subtasks: _subtasks.isNotEmpty ? _subtasks : null,
       );
 
       final key = await box.add(newTask);
@@ -565,6 +739,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                         icon: Icons.edit_note,
                         fillColor: fieldFill,
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             TextFormField(
                               controller: _controller,
@@ -575,6 +750,199 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                 prefix: const Icon(Icons.task_alt),
                               ),
                             ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _isDeconstructing
+                                      ? null
+                                      : _deconstructTaskWithAi,
+                                  icon: _isDeconstructing
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : Icon(
+                                          Icons.auto_awesome,
+                                          size: 18,
+                                          color: colorScheme.primary,
+                                        ),
+                                  label: Text(
+                                    _isDeconstructing
+                                        ? 'Deconstructing...'
+                                        : 'Deconstruct with AI',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                      horizontal: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: colorScheme.primary
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_isDeconstructing ||
+                                _aiGeneratedSubtasks.isNotEmpty ||
+                                _aiError != null) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary
+                                      .withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: colorScheme.primary
+                                        .withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.auto_awesome,
+                                          size: 18,
+                                          color: colorScheme.primary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'AI Task Breakdown',
+                                          style: theme.textTheme.titleSmall
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: colorScheme.primary,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        if (_isDeconstructing)
+                                          SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: colorScheme.primary,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    if (_aiError != null)
+                                      Text(
+                                        _aiError!,
+                                        style: TextStyle(
+                                          color: theme.colorScheme.error,
+                                          fontSize: 13,
+                                        ),
+                                      )
+                                    else if (_aiGeneratedSubtasks.isEmpty &&
+                                        _isDeconstructing)
+                                      Text(
+                                        'Generating subtasks with Gemini...',
+                                        style: theme.textTheme.bodySmall,
+                                      )
+                                    else ...[
+                                      ..._aiGeneratedSubtasks.map(
+                                        (subtask) => Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 6),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.circle_outlined,
+                                                size: 14,
+                                                color: colorScheme.primary
+                                                    .withValues(alpha: 0.7),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  subtask.title,
+                                                  style: const TextStyle(
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: colorScheme.primary
+                                                      .withValues(alpha: 0.12),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                child: Text(
+                                                  '${subtask.minutes} min',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: colorScheme.primary,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: ElevatedButton.icon(
+                                          onPressed: _subtasksAccepted
+                                              ? null
+                                              : _acceptAllSubtasks,
+                                          icon: Icon(
+                                            _subtasksAccepted
+                                                ? Icons.check_circle
+                                                : Icons.add_task,
+                                            size: 18,
+                                          ),
+                                          label: Text(
+                                            _subtasksAccepted
+                                                ? 'Subtasks Added'
+                                                : 'Accept All Subtasks',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                colorScheme.primary,
+                                            foregroundColor:
+                                                colorScheme.onPrimary,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _descController,
@@ -582,6 +950,107 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                               decoration: fieldDecoration(
                                 hint: 'Add description (optional)',
                                 prefix: const Icon(Icons.notes),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _SectionCard(
+                        title: 'Checklist / Subtasks (${_subtasks.length})',
+                        icon: Icons.checklist_rounded,
+                        fillColor: fieldFill,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (_subtasks.isEmpty)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                child: Text(
+                                  'No subtasks added yet. Use "Deconstruct with AI" above or add one manually.',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              )
+                            else
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _subtasks.length,
+                                itemBuilder: (context, index) {
+                                  final subtask = _subtasks[index];
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Row(
+                                      children: [
+                                        Checkbox(
+                                          value: subtask.isCompleted,
+                                          onChanged: (val) {
+                                            setState(() {
+                                              subtask.isCompleted = val ?? false;
+                                            });
+                                          },
+                                          materialTapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            subtask.title,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              decoration: subtask.isCompleted
+                                                  ? TextDecoration.lineThrough
+                                                  : null,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.primary
+                                                .withValues(alpha: 0.1),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            '${subtask.minutes} min',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: colorScheme.primary,
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.close_rounded,
+                                            size: 18,
+                                          ),
+                                          color: Colors.grey,
+                                          onPressed: () {
+                                            setState(() {
+                                              _subtasks.removeAt(index);
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: _showAddManualSubtaskDialog,
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Add Subtask'),
                               ),
                             ),
                           ],

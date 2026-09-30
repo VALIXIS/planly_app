@@ -21,6 +21,7 @@ Future<void> main() async {
   await Hive.initFlutter();
   Hive.registerAdapter(TaskAdapter());
   Hive.registerAdapter(TagModelAdapter());
+  Hive.registerAdapter(TaskSubtaskAdapter());
   await Hive.openBox<Task>('tasks');
   final tagBox = await Hive.openBox<TagModel>('tags');
   if (tagBox.isEmpty) {
