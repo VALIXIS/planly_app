@@ -12,6 +12,7 @@ import '../models/task_model.dart';
 import 'add_task_screen.dart';
 import 'daily_reflection_screen.dart';
 import 'widgets/home_group_header.dart';
+import 'widgets/task_card_3d.dart';
 
 // ─────────────────────────────────────────────────────
 // Group header widget
@@ -1007,7 +1008,6 @@ class _HomeScreenState extends State<HomeScreen>
                               '${selectedFilter.name}-$searchQuery',
                             ),
                             padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-                            cacheExtent: 800,
                             itemCount: taskRows.length,
                             itemBuilder: (context, index) {
                               final row = taskRows[index];
@@ -1128,22 +1128,18 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ─────────────────────────────────────────────
-  // Task card with multi-select support
+  // 3D Parallax & Micro-Interactive Task Card
   // ─────────────────────────────────────────────
   Widget _buildTaskItem(Task task, Color primary, bool isDark) {
-    final date = task.dueDate;
-    final isOverdue =
-        date != null && !task.isCompleted && date.isBefore(DateTime.now());
     final isSelected = _selectedKeys.contains(task.key);
 
-    return GestureDetector(
-      onLongPress: () {
-        HapticFeedback.mediumImpact();
-        setState(() {
-          _isSelectionMode = true;
-          _selectedKeys.add(task.key);
-        });
-      },
+    return TaskCard3D(
+      key: ValueKey('task-3d-${task.key}'),
+      task: task,
+      primary: primary,
+      isDark: isDark,
+      isSelected: isSelected,
+      isSelectionMode: _isSelectionMode,
       onTap: _isSelectionMode
           ? () {
               setState(() {
@@ -1155,246 +1151,263 @@ class _HomeScreenState extends State<HomeScreen>
                 }
               });
             }
-          : null,
-      child: Dismissible(
-        key: Key(task.key.toString()),
-        direction: _isSelectionMode
-            ? DismissDirection.none
-            : DismissDirection.endToStart,
-        confirmDismiss: (_) async {
-          final confirmed = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: const Text("Delete Task"),
-              content: Text('Are you sure you want to delete "${task.title}"?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text("Cancel"),
+          : () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AddTaskScreen(task: task),
                 ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text(
-                    "Delete",
-                    style: TextStyle(fontWeight: FontWeight.w600),
+              );
+            },
+      onLongPress: () {
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _isSelectionMode = true;
+          _selectedKeys.add(task.key);
+        });
+      },
+      onToggleComplete: (complete) async {
+        await _setTaskCompletion(task, complete);
+      },
+      onComplete: () async {
+        await _setTaskCompletion(task, true);
+      },
+      onReschedule: () {
+        _showRescheduleSheet(task);
+      },
+      onDelete: () {
+        _deleteTaskWithConfirmation(task);
+      },
+    );
+  }
+
+  Future<void> _showRescheduleSheet(Task task) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = Theme.of(context).colorScheme.primary;
+    final now = DateTime.now();
+
+    final selectedDate = await showModalBottomSheet<DateTime?>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E222A) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              ],
-            ),
-          );
-          return confirmed ?? false;
-        },
-        onDismissed: (_) async {
-          final box = Hive.box<Task>('tasks');
-          final deletedTask = Task(
-            title: task.title,
-            category: task.category,
-            dueDate: task.dueDate,
-            isCompleted: task.isCompleted,
-            description: task.description,
-            priority: task.priority,
-            recurrenceRule: task.recurrenceRule,
-            reminderTime: task.reminderTime,
-            reminderMinutesBefore: task.reminderMinutesBefore,
-            reminderEnabled: task.reminderEnabled,
-          );
-          await NotificationService().cancelNotification(task.key as int);
-          await task.delete();
-          AppStateService.rootScaffoldMessengerKey.currentState
-            ?..hideCurrentSnackBar()
-            ..showSnackBar(
-              SnackBar(
-                content: const Text("Task deleted"),
-                duration: const Duration(seconds: 3),
-                action: SnackBarAction(
-                  label: "UNDO",
-                  onPressed: () async {
-                    await box.add(deletedTask);
-                    await TaskActionService.scheduleReminderForTask(deletedTask);
-                  },
-                ),
               ),
-            );
-        },
-        background: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.red.shade400,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 20),
-          child: const Icon(Icons.delete, color: Colors.white),
-        ),
-        child: Opacity(
-          opacity: task.isCompleted ? 0.55 : 1.0,
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: task.isCompleted ? 2 : 4),
-            child: Card(
-              margin: EdgeInsets.zero,
-              clipBehavior: Clip.antiAlias,
-              color: isSelected
-                  ? (isDark
-                        ? primary.withValues(alpha: 0.18)
-                        : primary.withValues(alpha: 0.08))
-                  : null,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: isSelected
-                    ? BorderSide(color: primary.withValues(alpha: 0.4), width: 1.5)
-                    : BorderSide.none,
-              ),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(
-                      color: getPriorityColor(task.priority),
-                      width: 4,
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.edit_calendar_rounded, color: primary, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Reschedule Task",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          task.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.white60 : Colors.black54,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        onTap: _isSelectionMode
-                            ? null
-                            : () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => AddTaskScreen(task: task),
-                                  ),
-                                );
-                              },
-                        leading: _isSelectionMode
-                            ? AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                width: 22,
-                                height: 22,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(5),
-                                  color: isSelected
-                                      ? primary
-                                      : Colors.transparent,
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? primary
-                                        : Colors.grey.shade400,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: isSelected
-                                    ? const Icon(
-                                        Icons.check,
-                                        size: 14,
-                                        color: Colors.white,
-                                      )
-                                    : null,
-                              )
-                            : GestureDetector(
-                                onTap: () async {
-                                  HapticFeedback.lightImpact();
-                                  await _setTaskCompletion(
-                                    task,
-                                    !task.isCompleted,
-                                  );
-                                },
-                                child: AnimatedScale(
-                                  scale: task.isCompleted ? 1.1 : 1.0,
-                                  duration: const Duration(milliseconds: 150),
-                                  child: Container(
-                                    width: 22,
-                                    height: 22,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(5),
-                                      color: task.isCompleted
-                                          ? primary
-                                          : Colors.transparent,
-                                      border: Border.all(
-                                        color: task.isCompleted
-                                            ? primary
-                                            : Colors.grey.shade400,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                    child: task.isCompleted
-                                        ? const Icon(
-                                            Icons.check,
-                                            size: 14,
-                                            color: Colors.white,
-                                          )
-                                        : null,
-                                  ),
-                                ),
-                              ),
-                        title: Text(
-                          task.title,
-                          style: TextStyle(
-                            fontSize: 15,
-                            decoration: task.isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (date != null)
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.access_time_rounded,
-                                      size: 11,
-                                      color: isOverdue
-                                          ? Colors.red.shade400
-                                          : Colors.grey.shade500,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      DateFormat(
-                                        'dd MMM · hh:mm a',
-                                      ).format(date),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: isOverdue
-                                            ? Colors.red.shade400
-                                            : Colors.grey.shade500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              if (task.description != null &&
-                                  task.description!.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    task.description!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade500,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.wb_twilight_rounded, color: Colors.orange),
+                title: const Text("Later Today (6:00 PM)"),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () => Navigator.pop(
+                  ctx,
+                  DateTime(now.year, now.month, now.day, 18, 0),
                 ),
               ),
-            ),
+              ListTile(
+                leading: const Icon(Icons.wb_sunny_rounded, color: Colors.amber),
+                title: const Text("Tomorrow Morning (9:00 AM)"),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () {
+                  final tm = now.add(const Duration(days: 1));
+                  Navigator.pop(ctx, DateTime(tm.year, tm.month, tm.day, 9, 0));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.next_week_rounded, color: Colors.indigo),
+                title: const Text("Next Week (Monday 9:00 AM)"),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () {
+                  int daysUntilMon = (DateTime.monday - now.weekday + 7) % 7;
+                  if (daysUntilMon == 0) daysUntilMon = 7;
+                  final nextMon = now.add(Duration(days: daysUntilMon));
+                  Navigator.pop(ctx, DateTime(nextMon.year, nextMon.month, nextMon.day, 9, 0));
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.date_range_rounded, color: primary),
+                title: const Text("Pick Custom Date & Time"),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () async {
+                  Navigator.pop(ctx, null);
+                  final pickedDate = await showDatePicker(
+                    context: context,
+                    initialDate: task.dueDate ?? now,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2035),
+                  );
+                  if (pickedDate != null && mounted) {
+                    final pickedTime = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(task.dueDate ?? now),
+                    );
+                    if (pickedTime != null && mounted) {
+                      final finalDt = DateTime(
+                        pickedDate.year,
+                        pickedDate.month,
+                        pickedDate.day,
+                        pickedTime.hour,
+                        pickedTime.minute,
+                      );
+                      await _applyReschedule(task, finalDt);
+                    }
+                  }
+                },
+              ),
+              const Divider(height: 20),
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                title: const Text("Delete Task", style: TextStyle(color: Colors.red)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () {
+                  Navigator.pop(ctx, null);
+                  _deleteTaskWithConfirmation(task);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selectedDate != null) {
+      await _applyReschedule(task, selectedDate);
+    }
+  }
+
+  Future<void> _applyReschedule(Task task, DateTime newDate) async {
+    final oldDate = task.dueDate;
+    task.dueDate = newDate;
+    await task.save();
+    await TaskActionService.scheduleReminderForTask(task);
+    HapticFeedback.lightImpact();
+
+    AppStateService.rootScaffoldMessengerKey.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Rescheduled to ${DateFormat("dd MMM · hh:mm a").format(newDate)}'),
+          action: SnackBarAction(
+            label: "UNDO",
+            onPressed: () async {
+              task.dueDate = oldDate;
+              await task.save();
+              await TaskActionService.scheduleReminderForTask(task);
+            },
           ),
         ),
+      );
+  }
+
+  Future<void> _deleteTaskWithConfirmation(Task task) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text("Delete Task"),
+        content: Text('Are you sure you want to delete "${task.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text(
+              "Delete",
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
+
+    if (confirmed == true) {
+      final box = Hive.box<Task>('tasks');
+      final deletedTask = Task(
+        title: task.title,
+        category: task.category,
+        dueDate: task.dueDate,
+        isCompleted: task.isCompleted,
+        description: task.description,
+        priority: task.priority,
+        recurrenceRule: task.recurrenceRule,
+        reminderTime: task.reminderTime,
+        reminderMinutesBefore: task.reminderMinutesBefore,
+        reminderEnabled: task.reminderEnabled,
+      );
+      await NotificationService().cancelNotification(task.key as int);
+      await task.delete();
+      AppStateService.rootScaffoldMessengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text("Task deleted"),
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: "UNDO",
+              onPressed: () async {
+                await box.add(deletedTask);
+                await TaskActionService.scheduleReminderForTask(deletedTask);
+              },
+            ),
+          ),
+        );
+    }
   }
 
   String _emptyTitle() {
