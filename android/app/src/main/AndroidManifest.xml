@@ -49,6 +49,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- 🔔 Required for background notification action buttons -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"/>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
