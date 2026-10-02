@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
+import '../../../services/admob_service.dart';
 import '../../../services/ai_task_planner_service.dart';
 import '../../../services/notification_service.dart';
 import '../models/tag_model.dart';
@@ -52,6 +53,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   bool _subtasksAccepted = false;
   String? _aiError;
   StreamSubscription<List<TaskSubtask>>? _aiSubscription;
+  int _aiCredits = 3;
+  bool _isRewardedAdShowing = false;
 
   final List<String> categories = ['Work', 'Personal', 'Shopping', 'Others'];
   final List<String> priorities = ['High', 'Medium', 'Low'];
@@ -78,6 +81,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   @override
   void initState() {
     super.initState();
+    _loadAiCredits();
 
     final defaultDue = DateTime.now().add(const Duration(minutes: 15));
     selectedDate = DateTime(defaultDue.year, defaultDue.month, defaultDue.day);
@@ -134,6 +138,108 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     _reminderMinutesController.dispose();
     _customIntervalController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAiCredits() async {
+    final credits = await AdMobService.getCredits();
+    if (mounted) {
+      setState(() {
+        _aiCredits = credits;
+      });
+    }
+  }
+
+  Future<void> _handleAiDeconstructTap() async {
+    final title = _controller.text.trim();
+    if (title.isEmpty) {
+      _showMessage('Enter a task title first.');
+      return;
+    }
+
+    if (_aiCredits > 0) {
+      final newCredits = await AdMobService.consumeCredit();
+      if (mounted) {
+        setState(() {
+          _aiCredits = newCredits;
+        });
+      }
+      await _deconstructTaskWithAi();
+    } else {
+      await _showWatchAdDialog();
+    }
+  }
+
+  Future<void> _showWatchAdDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.stars_rounded, color: Colors.amber),
+            SizedBox(width: 8),
+            Text('Out of AI Credits'),
+          ],
+        ),
+        content: const Text(
+          'You have 0 free AI credits remaining. Watch a short video ad to instantly claim +5 bonus AI deconstruction credits!',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.ondemand_video_rounded),
+            label: const Text('Watch Ad (+5 Credits)'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      await _watchRewardedAdAndDeconstruct();
+    }
+  }
+
+  Future<void> _watchRewardedAdAndDeconstruct() async {
+    if (_isRewardedAdShowing) return;
+
+    setState(() {
+      _isRewardedAdShowing = true;
+    });
+
+    _showMessage('Loading rewarded video ad...');
+
+    await AdMobService.showRewardedAd(
+      onRewardGranted: (newCredits) async {
+        if (!mounted) return;
+        setState(() {
+          _aiCredits = newCredits;
+          _isRewardedAdShowing = false;
+        });
+        _showMessage('+5 AI credits added!');
+
+        final title = _controller.text.trim();
+        if (title.isNotEmpty) {
+          final remaining = await AdMobService.consumeCredit();
+          if (mounted) {
+            setState(() {
+              _aiCredits = remaining;
+            });
+          }
+          await _deconstructTaskWithAi();
+        }
+      },
+      onError: (error) {
+        if (!mounted) return;
+        setState(() {
+          _isRewardedAdShowing = false;
+        });
+        _showMessage('Could not load ad. Please try again.');
+      },
+    );
   }
 
   Future<void> _deconstructTaskWithAi() async {
@@ -752,12 +858,15 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                             ),
                             const SizedBox(height: 10),
                             Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 8,
                               children: [
                                 OutlinedButton.icon(
-                                  onPressed: _isDeconstructing
+                                  onPressed: (_isDeconstructing || _isRewardedAdShowing)
                                       ? null
-                                      : _deconstructTaskWithAi,
-                                  icon: _isDeconstructing
+                                      : _handleAiDeconstructTap,
+                                  icon: (_isDeconstructing || _isRewardedAdShowing)
                                       ? const SizedBox(
                                           width: 16,
                                           height: 16,
@@ -773,7 +882,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                   label: Text(
                                     _isDeconstructing
                                         ? 'Deconstructing...'
-                                        : 'Deconstruct with AI',
+                                        : _isRewardedAdShowing
+                                            ? 'Loading Ad...'
+                                            : 'Deconstruct with AI',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                       color: colorScheme.primary,
@@ -791,6 +902,50 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                       color: colorScheme.primary
                                           .withValues(alpha: 0.5),
                                     ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _aiCredits > 0
+                                        ? colorScheme.primary.withValues(alpha: 0.1)
+                                        : Colors.amber.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: _aiCredits > 0
+                                          ? colorScheme.primary.withValues(alpha: 0.3)
+                                          : Colors.amber.shade700,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _aiCredits > 0
+                                            ? Icons.stars_rounded
+                                            : Icons.ondemand_video_rounded,
+                                        size: 16,
+                                        color: _aiCredits > 0
+                                            ? colorScheme.primary
+                                            : Colors.amber.shade800,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _aiCredits > 0
+                                            ? '$_aiCredits free credits left'
+                                            : '0 credits left (+5 Ad)',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: _aiCredits > 0
+                                              ? colorScheme.primary
+                                              : Colors.amber.shade900,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
