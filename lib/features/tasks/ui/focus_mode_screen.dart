@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../../services/task_action_service.dart';
+import '../../focus/ui/pomodoro_screen.dart';
 import '../models/task_model.dart';
 
 class FocusModeScreen extends StatefulWidget {
@@ -100,6 +101,21 @@ class _FocusModeScreenState extends State<FocusModeScreen>
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Pomodoro Timer',
+            icon: const Icon(Icons.timer_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PomodoroScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: ValueListenableBuilder(
         valueListenable: Hive.box<Task>('tasks').listenable(),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
+import '../../focus/ui/pomodoro_screen.dart';
 import '../../common/widgets/motivational_quote_ad_card.dart';
-import 'focus_mode_screen.dart';
 import 'package:flutter/services.dart';
 import '../../../services/app_state_service.dart';
 import '../../../services/missed_reminder_service.dart';
@@ -795,7 +795,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     onTap: () => Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const FocusModeScreen(),
+                                        builder: (_) => const PomodoroScreen(),
                                       ),
                                     ),
                                     child: _HeaderBadge(
@@ -825,7 +825,7 @@ class _HomeScreenState extends State<HomeScreen>
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const FocusModeScreen(),
+                              builder: (_) => PomodoroScreen(initialTask: suggestedTask),
                             ),
                           ),
                           child: Container(
