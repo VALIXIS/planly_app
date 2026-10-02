@@ -1,7 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../../services/app_state_service.dart';
+import '../../../services/backup_restore_service.dart';
 import '../../../services/notification_service.dart';
 import '../../common/widgets/reliable_banner_ad.dart';
 import '../models/task_model.dart';
@@ -33,9 +37,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ];
 
   final NotificationService _notificationService = NotificationService();
+  final BackupRestoreService _backupService = BackupRestoreService();
 
   AndroidNotificationHealth? _androidNotificationHealth;
   bool _isCheckingNotificationHealth = false;
+  bool _isBackupLoading = false;
 
   Box<dynamic> get _settings => Hive.box('settings');
 
@@ -166,6 +172,108 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Text('Reliability wizard will open again on next app start.'),
       ),
     );
+  }
+
+  // ─── Backup & Restore ────────────────────────────────────────────────────
+
+  Future<void> _exportBackup() async {
+    if (_isBackupLoading) return;
+    setState(() => _isBackupLoading = true);
+    try {
+      await _backupService.exportBackupJson();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Backup file ready — choose where to save or share it.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isBackupLoading = false);
+    }
+  }
+
+  Future<void> _importBackup() async {
+    if (_isBackupLoading) return;
+
+    // Let the user pick a JSON file
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    final bytes = result.files.first.bytes;
+    if (bytes == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read file. Please try again.')),
+      );
+      return;
+    }
+
+    final jsonString = utf8.decode(bytes);
+
+    if (!mounted) return;
+
+    // Confirm before overwriting
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore Backup?'),
+        content: const Text(
+          'New tasks and tags from the backup will be added to your existing data. '
+          'Duplicates will be skipped automatically.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    setState(() => _isBackupLoading = true);
+    try {
+      final importResult = await _backupService.importBackupJson(jsonString);
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(importResult.success ? '✅ Restore Complete' : '❌ Restore Failed'),
+          content: Text(importResult.summary),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isBackupLoading = false);
+    }
   }
 
   void _saveSetting(String key, dynamic value) {
@@ -669,6 +777,84 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           );
                         },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                _sectionTitle('Backup & Restore', isDark),
+                _card(
+                  isDark: isDark,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(
+                                alpha: isDark ? 0.22 : 0.14),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.upload_rounded,
+                            color: Color(0xFF10B981),
+                            size: 20,
+                          ),
+                        ),
+                        title: const Text('Export Data'),
+                        subtitle: Text(
+                          'Save all tasks, subtasks, and tags as a JSON backup file.',
+                          style: TextStyle(fontSize: 12, color: subtitleColor),
+                        ),
+                        trailing: _isBackupLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              )
+                            : const Icon(Icons.chevron_right_rounded),
+                        onTap: _isBackupLoading ? null : _exportBackup,
+                      ),
+                      Divider(
+                        height: 1,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.06),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: primary.withValues(
+                                alpha: isDark ? 0.22 : 0.14),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.download_rounded,
+                            color: primary,
+                            size: 20,
+                          ),
+                        ),
+                        title: const Text('Import Data'),
+                        subtitle: Text(
+                          'Restore from a Planly JSON backup. Duplicates are skipped.',
+                          style: TextStyle(fontSize: 12, color: subtitleColor),
+                        ),
+                        trailing: _isBackupLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              )
+                            : const Icon(Icons.chevron_right_rounded),
+                        onTap: _isBackupLoading ? null : _importBackup,
                       ),
                     ],
                   ),

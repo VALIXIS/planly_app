@@ -45,6 +45,10 @@ dependencies:
   # 🎉 Confetti animation
   confetti: ^0.8.0
 
+  # Backup & Restore: sharing files and picking files
+  share_plus: ^10.1.4
+  file_picker: ^8.1.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
