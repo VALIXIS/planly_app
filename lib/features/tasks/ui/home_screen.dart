@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
+import '../../common/widgets/motivational_quote_ad_card.dart';
 import 'focus_mode_screen.dart';
 import 'package:flutter/services.dart';
 import '../../../services/app_state_service.dart';
@@ -980,50 +981,61 @@ class _HomeScreenState extends State<HomeScreen>
                   // 🔥 Filter chips (removed duplicate row)
                   // 📋 Task list
                   Expanded(
-                    child: isEmpty
-                        ? _emptyState(context)
-                        : ListView.builder(
-                            key: ValueKey(
-                              '${selectedFilter.name}-$searchQuery',
-                            ),
-                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-                            itemCount: taskRows.length,
-                            itemBuilder: (context, index) {
-                              final row = taskRows[index];
-                              if (row.isHeader) {
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(0, 16, 0, 8),
-                                  child: Row(
-                                    children: [
-                                      if (row.headerIcon != null) ...[
-                                        Icon(
-                                          row.headerIcon,
-                                          color: row.headerColor,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 6),
-                                      ],
-                                      HomeGroupHeader(
-                                        label: row.headerLabel!,
-                                        count: row.headerCount!,
-                                        color: row.headerColor!,
-                                        isDark: isDark,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              return RepaintBoundary(
-                                child: _buildTaskItem(
-                                  row.task!,
-                                  primary,
-                                  isDark,
-                                ),
-                              );
-                            },
+                    child: Column(
+                      children: [
+                        if (selectedFilter == FilterType.completed)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            child: MotivationalQuoteAdCard(),
                           ),
+                        Expanded(
+                          child: isEmpty
+                              ? _emptyState(context)
+                              : ListView.builder(
+                                  key: ValueKey(
+                                    '${selectedFilter.name}-$searchQuery',
+                                  ),
+                                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
+                                  itemCount: taskRows.length,
+                                  itemBuilder: (context, index) {
+                                    final row = taskRows[index];
+                                    if (row.isHeader) {
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.fromLTRB(0, 16, 0, 8),
+                                        child: Row(
+                                          children: [
+                                            if (row.headerIcon != null) ...[
+                                              Icon(
+                                                row.headerIcon,
+                                                color: row.headerColor,
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            HomeGroupHeader(
+                                              label: row.headerLabel!,
+                                              count: row.headerCount!,
+                                              color: row.headerColor!,
+                                              isDark: isDark,
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+
+                                    return RepaintBoundary(
+                                      child: _buildTaskItem(
+                                        row.task!,
+                                        primary,
+                                        isDark,
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               );

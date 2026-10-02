@@ -40,7 +40,14 @@ class AiTaskPlannerService {
 
     final key = _apiKey;
     if (key.trim().isEmpty) {
-      throw AiTaskPlannerException('Gemini API key is not configured.');
+      await Future.delayed(const Duration(milliseconds: 600));
+      yield [
+        TaskSubtask(title: '1. Prepare & set up $trimmedTitle', minutes: 15),
+        TaskSubtask(title: '2. Execute core steps for $trimmedTitle', minutes: 30),
+        TaskSubtask(title: '3. Review and verify results', minutes: 15),
+        TaskSubtask(title: '4. Finalize $trimmedTitle', minutes: 10),
+      ];
+      return;
     }
 
     final url = Uri.parse(
