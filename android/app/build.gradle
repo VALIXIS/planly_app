@@ -18,6 +18,7 @@ def isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
 android {
     namespace "com.js.planly"
     compileSdk 36
+    ndkVersion flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

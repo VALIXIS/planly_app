@@ -842,25 +842,8 @@ class _TaskCard3DState extends State<TaskCard3D>
           ),
         ],
         if (widget.task.subtasks != null && widget.task.subtasks!.isNotEmpty) ...[
-          const SizedBox(height: 2),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.checklist_rounded,
-                size: 11,
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-              ),
-              const SizedBox(width: 3),
-              Text(
-                '${widget.task.subtasks!.where((s) => s.isCompleted).length}/${widget.task.subtasks!.length} subtasks',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(height: 4),
+          _buildSubtaskProgressSection(isDark),
         ],
         if (widget.task.tags.isNotEmpty) ...[
           const SizedBox(height: 3),
@@ -889,6 +872,182 @@ class _TaskCard3DState extends State<TaskCard3D>
         ],
       ],
     );
+  }
+
+  bool _isSubtasksExpanded = false;
+
+  Widget _buildSubtaskProgressSection(bool isDark) {
+    final subtasks = widget.task.subtasks!;
+    final total = subtasks.length;
+    final completed = subtasks.where((s) => s.isCompleted).length;
+    final double ratio = total == 0 ? 0.0 : completed / total;
+    final int percentage = (ratio * 100).round();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() {
+              _isSubtasksExpanded = !_isSubtasksExpanded;
+            });
+          },
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2.0),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.checklist_rounded,
+                  size: 13,
+                  color: ratio == 1.0
+                      ? const Color(0xFF10B981)
+                      : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '$completed/$total ($percentage%) completed',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: ratio == 1.0
+                        ? const Color(0xFF10B981)
+                        : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  _isSubtasksExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 16,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: Container(
+            height: 4.5,
+            width: double.infinity,
+            color: widget.primary.withValues(alpha: isDark ? 0.16 : 0.08),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                    width: constraints.maxWidth * ratio,
+                    decoration: BoxDecoration(
+                      color: ratio == 1.0
+                          ? const Color(0xFF10B981)
+                          : widget.primary,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        if (_isSubtasksExpanded) ...[
+          const SizedBox(height: 6),
+          Column(
+            children: List.generate(subtasks.length, (index) {
+              final subtask = subtasks[index];
+              return InkWell(
+                onTap: () => _toggleSubtaskAtIndex(index),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Checkbox(
+                          value: subtask.isCompleted,
+                          activeColor: const Color(0xFF10B981),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          onChanged: (val) => _toggleSubtaskAtIndex(index),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          subtask.title,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            decoration: subtask.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                            color: subtask.isCompleted
+                                ? (isDark ? Colors.grey.shade500 : Colors.grey.shade400)
+                                : (isDark ? Colors.grey.shade200 : Colors.grey.shade800),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _toggleSubtaskAtIndex(int index) {
+    if (widget.task.subtasks == null ||
+        index < 0 ||
+        index >= widget.task.subtasks!.length) {
+      return;
+    }
+
+    final subtasks = widget.task.subtasks!;
+    final subtask = subtasks[index];
+    final bool newStatus = !subtask.isCompleted;
+
+    setState(() {
+      subtask.isCompleted = newStatus;
+    });
+
+    try {
+      widget.task.save();
+    } catch (_) {}
+
+    final bool allCompleted =
+        subtasks.isNotEmpty && subtasks.every((s) => s.isCompleted);
+
+    if (allCompleted && !widget.task.isCompleted) {
+      // 🚀 Auto-complete parent task when last subtask is checked!
+      setState(() {
+        widget.task.isCompleted = true;
+      });
+      try {
+        widget.task.save();
+      } catch (_) {}
+
+      _triggerCelebrationAndComplete();
+      widget.onToggleComplete?.call(true);
+    } else if (!allCompleted && widget.task.isCompleted && !newStatus) {
+      // If a subtask was unchecked after auto-completion, mark parent incomplete
+      setState(() {
+        widget.task.isCompleted = false;
+      });
+      try {
+        widget.task.save();
+      } catch (_) {}
+      widget.onToggleComplete?.call(false);
+      HapticFeedback.selectionClick();
+    } else {
+      HapticFeedback.selectionClick();
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:planly/features/tasks/models/tag_model.dart';
 import 'package:planly/features/tasks/models/task_model.dart';
 import 'package:planly/features/tasks/ui/add_task_screen.dart';
 
@@ -13,9 +14,11 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp('planly_test_hive');
     Hive.init(tempDir.path);
     if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(TaskAdapter());
-    if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(TaskSubtaskAdapter());
+    if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(TagModelAdapter());
+    if (!Hive.isAdapterRegistered(2)) Hive.registerAdapter(TaskSubtaskAdapter());
     await Hive.openBox<Task>('tasks');
     await Hive.openBox('settings');
+    await Hive.openBox<TagModel>('tags');
   });
 
   tearDownAll(() async {

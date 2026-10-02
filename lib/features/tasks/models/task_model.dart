@@ -2,6 +2,8 @@ import 'package:hive/hive.dart';
 
 part 'task_model.g.dart';
 
+typedef SubTask = TaskSubtask;
+
 @HiveType(typeId: 0)
 class Task extends HiveObject {
   @HiveField(0)
@@ -59,6 +61,24 @@ class Task extends HiveObject {
     this.tags = const [],
     this.subtasks,
   });
+
+  int get completedSubtasksCount =>
+      subtasks?.where((s) => s.isCompleted).length ?? 0;
+
+  int get totalSubtasksCount => subtasks?.length ?? 0;
+
+  double get subtaskCompletionRatio {
+    if (subtasks == null || subtasks!.isEmpty) return 0.0;
+    return completedSubtasksCount / totalSubtasksCount;
+  }
+
+  int get subtaskCompletionPercentage =>
+      (subtaskCompletionRatio * 100).round();
+
+  bool get areAllSubtasksCompleted =>
+      subtasks != null &&
+      subtasks!.isNotEmpty &&
+      subtasks!.every((s) => s.isCompleted);
 }
 
 @HiveType(typeId: 2)
@@ -74,7 +94,7 @@ class TaskSubtask extends HiveObject {
 
   TaskSubtask({
     required this.title,
-    required this.minutes,
+    this.minutes = 0,
     this.isCompleted = false,
   });
 
