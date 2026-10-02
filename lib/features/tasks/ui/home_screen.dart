@@ -14,6 +14,7 @@ import 'add_task_screen.dart';
 import 'daily_reflection_screen.dart';
 import 'task_search_delegate.dart';
 import 'widgets/home_group_header.dart';
+import 'widgets/quick_capture_sheet.dart';
 import 'widgets/task_card_3d.dart';
 
 // ─────────────────────────────────────────────────────
@@ -1044,14 +1045,20 @@ class _HomeScreenState extends State<HomeScreen>
         ),
         floatingActionButton: _isSelectionMode
           ? null
-          : FloatingActionButton(
-              onPressed: () {
+          : GestureDetector(
+              onLongPress: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AddTaskScreen()),
                 );
               },
-              child: const Icon(Icons.add),
+              child: FloatingActionButton(
+                onPressed: () {
+                  QuickCaptureSheet.show(context);
+                },
+                tooltip: 'Quick Capture (Hold for full form)',
+                child: const Icon(Icons.add),
+              ),
             ),
       ),
     );
