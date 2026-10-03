@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/theme/fluid_bottom_sheet.dart';
+import '../../../../core/theme/oled_theme.dart';
+import '../../../../services/app_state_service.dart';
 import '../../../../services/natural_language_parser.dart';
 import '../../../../services/notification_service.dart';
 import '../../models/task_model.dart';
@@ -13,7 +16,7 @@ class QuickCaptureSheet extends StatefulWidget {
   const QuickCaptureSheet({super.key, this.initialTask});
 
   static Future<void> show(BuildContext context, {Task? initialTask}) {
-    return showModalBottomSheet(
+    return showFluidModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -153,6 +156,7 @@ class _QuickCaptureSheetState extends State<QuickCaptureSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final isOled = isDark && AppStateService.isOledMode;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -160,8 +164,17 @@ class _QuickCaptureSheetState extends State<QuickCaptureSheet> {
       ),
       child: Container(
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+          color: isDark
+              ? (isOled ? OledTheme.charcoalCard : const Color(0xFF1E1E2C))
+              : Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: isOled
+              ? const Border(
+                  top: BorderSide(color: OledTheme.charcoalBorder, width: 1),
+                  left: BorderSide(color: OledTheme.charcoalBorder, width: 1),
+                  right: BorderSide(color: OledTheme.charcoalBorder, width: 1),
+                )
+              : null,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.15),
@@ -183,7 +196,9 @@ class _QuickCaptureSheetState extends State<QuickCaptureSheet> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[700] : Colors.grey[300],
+                    color: isDark
+                        ? (isOled ? const Color(0xFF333333) : Colors.grey[700])
+                        : Colors.grey[300],
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

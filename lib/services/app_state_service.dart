@@ -14,24 +14,43 @@ class AppStateService {
   static final ValueNotifier<ThemeMode> themeNotifier =
       ValueNotifier<ThemeMode>(ThemeMode.light);
 
+  static final ValueNotifier<bool> oledModeNotifier =
+      ValueNotifier<bool>(false);
+
   static final ValueNotifier<Color> accentColorNotifier =
       ValueNotifier<Color>(defaultAccentColor);
 
   static Box<dynamic> get _settingsBox => Hive.box('settings');
 
+  static bool get isOledMode => oledModeNotifier.value;
+
   static void loadPersistedSettings() {
     final isDark = _settingsBox.get('isDarkMode', defaultValue: false) as bool;
+    final isOled = _settingsBox.get('isOledMode', defaultValue: false) as bool;
     final savedColor =
         _settingsBox.get('accentColor', defaultValue: defaultAccentColor.toARGB32())
             as int;
 
     themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+    oledModeNotifier.value = isOled;
     accentColorNotifier.value = Color(savedColor);
   }
 
   static Future<void> setThemeMode(ThemeMode mode) async {
     themeNotifier.value = mode;
     await _settingsBox.put('isDarkMode', mode == ThemeMode.dark);
+  }
+
+  static Future<void> setOledMode(bool value) async {
+    oledModeNotifier.value = value;
+    await _settingsBox.put('isOledMode', value);
+    if (value && themeNotifier.value != ThemeMode.dark) {
+      await setThemeMode(ThemeMode.dark);
+    }
+  }
+
+  static Future<void> toggleOledMode() async {
+    await setOledMode(!oledModeNotifier.value);
   }
 
   static Future<void> toggleTheme() async {

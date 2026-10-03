@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../../../core/theme/oled_theme.dart';
 import '../../../services/app_state_service.dart';
 import '../../../services/backup_restore_service.dart';
 import '../../../services/notification_service.dart';
@@ -22,6 +24,8 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final List<Map<String, dynamic>> _colors = [
+    {'label': 'Neon Mint', 'color': OledTheme.neonMint},
+    {'label': 'Neon Cyan', 'color': OledTheme.neonCyan},
     {'label': 'Violet', 'color': const Color(0xFF7C4DFF)},
     {'label': 'Lavender', 'color': const Color(0xFF9575CD)},
     {'label': 'Indigo', 'color': const Color(0xFF3D5AFE)},
@@ -336,13 +340,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _card({required bool isDark, required Widget child}) {
+    final isOled = isDark && AppStateService.isOledMode;
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        color: isDark
+            ? (isOled ? OledTheme.charcoalCard : const Color(0xFF1E1E1E))
+            : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.05)
+              ? (isOled
+                  ? OledTheme.charcoalBorder
+                  : Colors.white.withValues(alpha: 0.05))
               : Colors.black.withValues(alpha: 0.06),
           width: 1,
         ),
@@ -523,23 +532,115 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: ValueListenableBuilder<ThemeMode>(
                     valueListenable: AppStateService.themeNotifier,
                     builder: (context, mode, _) {
-                      return SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        secondary: Icon(
-                          Icons.dark_mode_outlined,
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
-                        title: const Text('Dark Mode'),
-                        subtitle: Text(
-                          'Reduce eye strain in low-light environments',
-                          style: TextStyle(fontSize: 12, color: subtitleColor),
-                        ),
-                        value: mode == ThemeMode.dark,
-                        onChanged: (value) {
-                          AppStateService.setThemeMode(
-                            value ? ThemeMode.dark : ThemeMode.light,
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: AppStateService.oledModeNotifier,
+                        builder: (context, isOled, _) {
+                          final isDarkMode = mode == ThemeMode.dark;
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4, bottom: 12),
+                                child: SegmentedButton<String>(
+                                  segments: const [
+                                    ButtonSegment<String>(
+                                      value: 'light',
+                                      icon: Icon(Icons.light_mode_outlined, size: 18),
+                                      label: Text('Light'),
+                                    ),
+                                    ButtonSegment<String>(
+                                      value: 'dark',
+                                      icon: Icon(Icons.dark_mode_outlined, size: 18),
+                                      label: Text('Dark'),
+                                    ),
+                                    ButtonSegment<String>(
+                                      value: 'oled',
+                                      icon: Icon(Icons.contrast_rounded, size: 18),
+                                      label: Text('OLED'),
+                                    ),
+                                  ],
+                                  selected: {
+                                    if (isDarkMode && isOled)
+                                      'oled'
+                                    else if (isDarkMode)
+                                      'dark'
+                                    else
+                                      'light'
+                                  },
+                                  onSelectionChanged: (selection) async {
+                                    HapticFeedback.selectionClick();
+                                    final choice = selection.first;
+                                    if (choice == 'oled') {
+                                      await AppStateService.setOledMode(true);
+                                      await AppStateService.setThemeMode(ThemeMode.dark);
+                                    } else if (choice == 'dark') {
+                                      await AppStateService.setOledMode(false);
+                                      await AppStateService.setThemeMode(ThemeMode.dark);
+                                    } else {
+                                      await AppStateService.setThemeMode(ThemeMode.light);
+                                    }
+                                    if (mounted) setState(() {});
+                                  },
+                                ),
+                              ),
+                              Divider(
+                                height: 1,
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.06)
+                                    : Colors.black.withValues(alpha: 0.06),
+                              ),
+                              SwitchListTile.adaptive(
+                                contentPadding: EdgeInsets.zero,
+                                secondary: Icon(
+                                  Icons.dark_mode_outlined,
+                                  color: isDark ? Colors.white70 : Colors.black54,
+                                ),
+                                title: const Text('Dark Mode'),
+                                subtitle: Text(
+                                  'Reduce eye strain in low-light environments',
+                                  style: TextStyle(fontSize: 12, color: subtitleColor),
+                                ),
+                                value: isDarkMode,
+                                onChanged: (value) async {
+                                  HapticFeedback.selectionClick();
+                                  await AppStateService.setThemeMode(
+                                    value ? ThemeMode.dark : ThemeMode.light,
+                                  );
+                                  if (mounted) setState(() {});
+                                },
+                              ),
+                              Divider(
+                                height: 1,
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.06)
+                                    : Colors.black.withValues(alpha: 0.06),
+                              ),
+                              SwitchListTile.adaptive(
+                                contentPadding: EdgeInsets.zero,
+                                secondary: Icon(
+                                  Icons.contrast_rounded,
+                                  color: isOled && isDarkMode
+                                      ? OledTheme.neonMint
+                                      : (isDark ? Colors.white70 : Colors.black54),
+                                ),
+                                title: const Text('OLED True Black'),
+                                subtitle: Text(
+                                  'Pure #000000 background with neon accents to save battery on OLED displays',
+                                  style: TextStyle(fontSize: 12, color: subtitleColor),
+                                ),
+                                value: isOled && isDarkMode,
+                                onChanged: (value) async {
+                                  HapticFeedback.selectionClick();
+                                  await AppStateService.setOledMode(value);
+                                  if (value && !isDarkMode) {
+                                    await AppStateService.setThemeMode(ThemeMode.dark);
+                                  }
+                                  if (mounted) setState(() {});
+                                },
+                              ),
+                            ],
                           );
-                          if (mounted) setState(() {});
                         },
                       );
                     },

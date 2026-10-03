@@ -3,6 +3,8 @@ import 'package:confetti/confetti.dart';
 import '../../focus/ui/pomodoro_screen.dart';
 import '../../common/widgets/motivational_quote_ad_card.dart';
 import 'package:flutter/services.dart';
+import '../../../core/theme/fluid_bottom_sheet.dart';
+import '../../../core/theme/oled_theme.dart';
 import '../../../services/app_state_service.dart';
 import '../../../services/missed_reminder_service.dart';
 import '../../../services/notification_service.dart';
@@ -1181,18 +1183,28 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _showRescheduleSheet(Task task) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isOled = isDark && AppStateService.isOledMode;
     final primary = Theme.of(context).colorScheme.primary;
     final now = DateTime.now();
 
-    final selectedDate = await showModalBottomSheet<DateTime?>(
+    final selectedDate = await showFluidModalBottomSheet<DateTime?>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
         return Container(
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E222A) : Colors.white,
+            color: isDark
+                ? (isOled ? OledTheme.charcoalCard : const Color(0xFF1E222A))
+                : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: isOled
+                ? const Border(
+                    top: BorderSide(color: OledTheme.charcoalBorder, width: 1),
+                    left: BorderSide(color: OledTheme.charcoalBorder, width: 1),
+                    right: BorderSide(color: OledTheme.charcoalBorder, width: 1),
+                  )
+                : null,
           ),
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           child: Column(
@@ -1204,7 +1216,9 @@ class _HomeScreenState extends State<HomeScreen>
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade400.withValues(alpha: 0.5),
+                    color: isDark
+                        ? (isOled ? const Color(0xFF333333) : Colors.grey.shade600)
+                        : Colors.grey.shade400.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1248,16 +1262,20 @@ class _HomeScreenState extends State<HomeScreen>
                 leading: const Icon(Icons.wb_twilight_rounded, color: Colors.orange),
                 title: const Text("Later Today (6:00 PM)"),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                onTap: () => Navigator.pop(
-                  ctx,
-                  DateTime(now.year, now.month, now.day, 18, 0),
-                ),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(
+                    ctx,
+                    DateTime(now.year, now.month, now.day, 18, 0),
+                  );
+                },
               ),
               ListTile(
                 leading: const Icon(Icons.wb_sunny_rounded, color: Colors.amber),
                 title: const Text("Tomorrow Morning (9:00 AM)"),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 onTap: () {
+                  HapticFeedback.lightImpact();
                   final tm = now.add(const Duration(days: 1));
                   Navigator.pop(ctx, DateTime(tm.year, tm.month, tm.day, 9, 0));
                 },
@@ -1267,6 +1285,7 @@ class _HomeScreenState extends State<HomeScreen>
                 title: const Text("Next Week (Monday 9:00 AM)"),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 onTap: () {
+                  HapticFeedback.lightImpact();
                   int daysUntilMon = (DateTime.monday - now.weekday + 7) % 7;
                   if (daysUntilMon == 0) daysUntilMon = 7;
                   final nextMon = now.add(Duration(days: daysUntilMon));
@@ -1278,6 +1297,7 @@ class _HomeScreenState extends State<HomeScreen>
                 title: const Text("Pick Custom Date & Time"),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 onTap: () async {
+                  HapticFeedback.lightImpact();
                   Navigator.pop(ctx, null);
                   final pickedDate = await showDatePicker(
                     context: context,

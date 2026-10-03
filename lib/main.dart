@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'core/theme/oled_theme.dart';
 import 'features/tasks/models/tag_model.dart';
 import 'features/tasks/models/task_model.dart';
 import 'features/tasks/ui/calendar_screen.dart';
@@ -57,36 +58,47 @@ class MyApp extends StatelessWidget {
                 ? Colors.black
                 : Colors.white;
 
-            return MaterialApp(
-              title: 'Planly',
-              debugShowCheckedModeBanner: false,
-              scaffoldMessengerKey: AppStateService.rootScaffoldMessengerKey,
-              themeMode: mode,
-              themeAnimationDuration: Duration.zero,
-              themeAnimationCurve: Curves.linear,
-              theme: _buildLightTheme(accentColor, onPrimary),
-              darkTheme: _buildDarkTheme(accentColor, onPrimary),
-              home: ValueListenableBuilder(
-                valueListenable: Hive.box('settings').listenable(
-                  keys: const ['onboardingDone'],
-                ),
-                builder: (context, _, _) {
-                  final onboardingDone = Hive.box('settings').get(
-                    'onboardingDone',
-                    defaultValue: false,
-                  ) as bool;
+            return ValueListenableBuilder<bool>(
+              valueListenable: AppStateService.oledModeNotifier,
+              builder: (context, isOled, _) {
+                final oledAccent = accentColor == AppStateService.defaultAccentColor
+                    ? OledTheme.neonMint
+                    : accentColor;
 
-                  if (!onboardingDone) {
-                    return OnboardingScreen(
-                      onFinish: () {
-                        AppStateService.setOnboardingDone();
-                      },
-                    );
-                  }
+                return MaterialApp(
+                  title: 'Planly',
+                  debugShowCheckedModeBanner: false,
+                  scaffoldMessengerKey: AppStateService.rootScaffoldMessengerKey,
+                  themeMode: mode,
+                  themeAnimationDuration: Duration.zero,
+                  themeAnimationCurve: Curves.linear,
+                  theme: _buildLightTheme(accentColor, onPrimary),
+                  darkTheme: isOled
+                      ? OledTheme.buildTheme(accentColor: oledAccent)
+                      : _buildDarkTheme(accentColor, onPrimary),
+                  home: ValueListenableBuilder(
+                    valueListenable: Hive.box('settings').listenable(
+                      keys: const ['onboardingDone'],
+                    ),
+                    builder: (context, _, _) {
+                      final onboardingDone = Hive.box('settings').get(
+                        'onboardingDone',
+                        defaultValue: false,
+                      ) as bool;
 
-                  return const SplashScreen(nextScreen: MainScreen());
-                },
-              ),
+                      if (!onboardingDone) {
+                        return OnboardingScreen(
+                          onFinish: () {
+                            AppStateService.setOnboardingDone();
+                          },
+                        );
+                      }
+
+                      return const SplashScreen(nextScreen: MainScreen());
+                    },
+                  ),
+                );
+              },
             );
           },
         );
@@ -325,9 +337,12 @@ class _MainScreenState extends State<MainScreen> {
                 curve: Curves.easeOutCubic,
               );
             },
-            backgroundColor: Theme.of(context).colorScheme.surface,
+            backgroundColor:
+                Theme.of(context).navigationBarTheme.backgroundColor ??
+                Theme.of(context).colorScheme.surface,
             elevation: 2,
             indicatorColor:
+                Theme.of(context).navigationBarTheme.indicatorColor ??
                 Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
             destinations: const [
               NavigationDestination(

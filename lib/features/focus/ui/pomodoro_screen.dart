@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../../../core/theme/fluid_bottom_sheet.dart';
 import '../../../services/task_action_service.dart';
 import '../../tasks/models/task_model.dart';
 import '../services/ambient_audio_service.dart';
@@ -361,7 +362,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
   }
 
   void _showDurationPicker() {
-    showModalBottomSheet(
+    showFluidModalBottomSheet(
       context: context,
       backgroundColor: Theme.of(context).cardColor,
       shape: const RoundedRectangleBorder(
@@ -473,7 +474,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
   }
 
   void _showTaskSelector() {
-    showModalBottomSheet(
+    showFluidModalBottomSheet(
       context: context,
       backgroundColor: Theme.of(context).cardColor,
       shape: const RoundedRectangleBorder(
