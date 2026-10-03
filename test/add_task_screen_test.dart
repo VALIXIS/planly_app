@@ -17,8 +17,8 @@ void main() {
     if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(TagModelAdapter());
     if (!Hive.isAdapterRegistered(2)) Hive.registerAdapter(TaskSubtaskAdapter());
     await Hive.openBox<Task>('tasks');
-    await Hive.openBox('settings');
     await Hive.openBox<TagModel>('tags');
+    await Hive.openBox('settings');
   });
 
   tearDownAll(() async {

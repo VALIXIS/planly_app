@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
-import 'focus_mode_screen.dart';
+import '../../focus/ui/pomodoro_screen.dart';
+import '../../common/widgets/motivational_quote_ad_card.dart';
 import 'package:flutter/services.dart';
 import '../../../services/app_state_service.dart';
 import '../../../services/missed_reminder_service.dart';
@@ -13,6 +14,7 @@ import 'add_task_screen.dart';
 import 'daily_reflection_screen.dart';
 import 'task_search_delegate.dart';
 import 'widgets/home_group_header.dart';
+import 'widgets/quick_capture_sheet.dart';
 import 'widgets/task_card_3d.dart';
 
 // ─────────────────────────────────────────────────────
@@ -794,7 +796,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     onTap: () => Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const FocusModeScreen(),
+                                        builder: (_) => const PomodoroScreen(),
                                       ),
                                     ),
                                     child: _HeaderBadge(
@@ -824,7 +826,7 @@ class _HomeScreenState extends State<HomeScreen>
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const FocusModeScreen(),
+                              builder: (_) => PomodoroScreen(initialTask: suggestedTask),
                             ),
                           ),
                           child: Container(
@@ -980,50 +982,61 @@ class _HomeScreenState extends State<HomeScreen>
                   // 🔥 Filter chips (removed duplicate row)
                   // 📋 Task list
                   Expanded(
-                    child: isEmpty
-                        ? _emptyState(context)
-                        : ListView.builder(
-                            key: ValueKey(
-                              '${selectedFilter.name}-$searchQuery',
-                            ),
-                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-                            itemCount: taskRows.length,
-                            itemBuilder: (context, index) {
-                              final row = taskRows[index];
-                              if (row.isHeader) {
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(0, 16, 0, 8),
-                                  child: Row(
-                                    children: [
-                                      if (row.headerIcon != null) ...[
-                                        Icon(
-                                          row.headerIcon,
-                                          color: row.headerColor,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 6),
-                                      ],
-                                      HomeGroupHeader(
-                                        label: row.headerLabel!,
-                                        count: row.headerCount!,
-                                        color: row.headerColor!,
-                                        isDark: isDark,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              return RepaintBoundary(
-                                child: _buildTaskItem(
-                                  row.task!,
-                                  primary,
-                                  isDark,
-                                ),
-                              );
-                            },
+                    child: Column(
+                      children: [
+                        if (selectedFilter == FilterType.completed)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            child: MotivationalQuoteAdCard(),
                           ),
+                        Expanded(
+                          child: isEmpty
+                              ? _emptyState(context)
+                              : ListView.builder(
+                                  key: ValueKey(
+                                    '${selectedFilter.name}-$searchQuery',
+                                  ),
+                                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
+                                  itemCount: taskRows.length,
+                                  itemBuilder: (context, index) {
+                                    final row = taskRows[index];
+                                    if (row.isHeader) {
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.fromLTRB(0, 16, 0, 8),
+                                        child: Row(
+                                          children: [
+                                            if (row.headerIcon != null) ...[
+                                              Icon(
+                                                row.headerIcon,
+                                                color: row.headerColor,
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            HomeGroupHeader(
+                                              label: row.headerLabel!,
+                                              count: row.headerCount!,
+                                              color: row.headerColor!,
+                                              isDark: isDark,
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+
+                                    return RepaintBoundary(
+                                      child: _buildTaskItem(
+                                        row.task!,
+                                        primary,
+                                        isDark,
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               );
@@ -1032,14 +1045,20 @@ class _HomeScreenState extends State<HomeScreen>
         ),
         floatingActionButton: _isSelectionMode
           ? null
-          : FloatingActionButton(
-              onPressed: () {
+          : GestureDetector(
+              onLongPress: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AddTaskScreen()),
                 );
               },
-              child: const Icon(Icons.add),
+              child: FloatingActionButton(
+                onPressed: () {
+                  QuickCaptureSheet.show(context);
+                },
+                tooltip: 'Quick Capture (Hold for full form)',
+                child: const Icon(Icons.add),
+              ),
             ),
       ),
     );

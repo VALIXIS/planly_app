@@ -212,18 +212,11 @@ void main() {
       );
     });
 
-    test('throws error when API key is missing or empty', () async {
+    test('returns default fallback subtasks when API key is missing or empty', () async {
       final service = AiTaskPlannerService(apiKey: '');
-      expect(
-        () => service.deconstructTaskStream('Prepare for exam').first,
-        throwsA(
-          isA<AiTaskPlannerException>().having(
-            (e) => e.message,
-            'message',
-            equals('Gemini API key is not configured.'),
-          ),
-        ),
-      );
+      final subtasks = await service.deconstructTaskStream('Prepare for exam').first;
+      expect(subtasks.length, 4);
+      expect(subtasks.first.title, contains('Prepare for exam'));
     });
 
     test('streams generated subtasks successfully with mocked HTTP client', () async {

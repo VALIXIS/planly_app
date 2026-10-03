@@ -19,6 +19,7 @@ dependencies:
   # Local storage
   hive: ^2.2.3
   hive_flutter: ^1.1.0
+  shared_preferences: ^2.2.2
 
   # Calendar & date formatting
   intl: ^0.18.1
@@ -35,8 +36,18 @@ dependencies:
   # HTTP client for API requests
   http: ^1.2.0
 
+  # File system paths
+  path_provider: ^2.1.2
+
+  # Audio & Ambient playback
+  audioplayers: ^6.1.0
+
   # 🎉 Confetti animation
   confetti: ^0.8.0
+
+  # Backup & Restore: sharing files and picking files
+  share_plus: ^10.1.4
+  file_picker: ^8.1.7
 
 dev_dependencies:
   flutter_test:

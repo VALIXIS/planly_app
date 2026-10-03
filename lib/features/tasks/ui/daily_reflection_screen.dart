@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../common/widgets/motivational_quote_ad_card.dart';
 
 /// 🌙 Daily Reflection Screen
 /// Full-screen experience shown once per day.
@@ -94,191 +95,198 @@ class DailyReflectionScreen extends StatelessWidget {
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(28, 24, 28, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Top label ───────────────────────
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      width: 1,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Top label ───────────────────────
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      "Daily Reflection",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.7),
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
-                  child: Text(
-                    "Daily Reflection",
+
+                  const SizedBox(height: 20),
+
+                  // ── Performance label ────────────────
+                  Text(
+                    _label(),
+                    style: const TextStyle(
+                      fontSize: 38,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                      height: 1.1,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    _subtitle(),
                     style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.7),
-                      letterSpacing: 0.5,
+                      fontSize: 14,
+                      color: Colors.white.withValues(alpha: 0.55),
+                      letterSpacing: 0.3,
                     ),
                   ),
-                ),
 
-                const Spacer(flex: 2),
+                  const SizedBox(height: 24),
 
-                // ── Performance label ────────────────
-                Text(
-                  _label(),
-                  style: const TextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.5,
-                    height: 1.1,
+                  // ── Progress stats ───────────────────
+                  Row(
+                    children: [
+                      // Completed count
+                      _StatChip(
+                        value: "$completed",
+                        label: "Completed",
+                        color: stateColor,
+                      ),
+                      const SizedBox(width: 12),
+                      // Total count
+                      _StatChip(
+                        value: "$total",
+                        label: "Total",
+                        color: Colors.white.withValues(alpha: 0.3),
+                      ),
+                      const SizedBox(width: 12),
+                      // Percentage
+                      _StatChip(
+                        value: "$percent%",
+                        label: "Done",
+                        color: Colors.white.withValues(alpha: 0.3),
+                      ),
+                    ],
                   ),
-                ),
 
-                const SizedBox(height: 6),
+                  const SizedBox(height: 20),
 
-                Text(
-                  _subtitle(),
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withValues(alpha: 0.55),
-                    letterSpacing: 0.3,
+                  // ── Animated progress bar ────────────
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: pct),
+                    duration: const Duration(milliseconds: 900),
+                    curve: Curves.easeOutCubic,
+                    builder: (_, value, _) {
+                      return Column(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: value,
+                              minHeight: 6,
+                              backgroundColor: Colors.white.withValues(alpha: 0.12),
+                              color: stateColor,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                ),
 
-                const SizedBox(height: 28),
+                  const SizedBox(height: 24),
 
-                // ── Progress stats ───────────────────
-                Row(
-                  children: [
-                    // Completed count
-                    _StatChip(
-                      value: "$completed",
-                      label: "Completed",
-                      color: stateColor,
-                    ),
-                    const SizedBox(width: 12),
-                    // Total count
-                    _StatChip(
-                      value: "$total",
-                      label: "Total",
-                      color: Colors.white.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(width: 12),
-                    // Percentage
-                    _StatChip(
-                      value: "$percent%",
-                      label: "Done",
-                      color: Colors.white.withValues(alpha: 0.3),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                // ── Animated progress bar ────────────
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: pct),
-                  duration: const Duration(milliseconds: 900),
-                  curve: Curves.easeOutCubic,
-                  builder: (_, value, _) {
-                    return Column(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: value,
-                            minHeight: 6,
-                            backgroundColor: Colors.white.withValues(alpha: 0.12),
-                            color: stateColor,
+                  // ── Message ──────────────────────────
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: stateColor.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          _message(),
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.white.withValues(alpha: 0.85),
+                            height: 1.65,
+                            fontWeight: FontWeight.w300,
                           ),
                         ),
-                      ],
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 32),
-
-                // ── Message ──────────────────────────
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 3,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: stateColor.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(4),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        _message(),
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: Colors.white.withValues(alpha: 0.85),
-                          height: 1.65,
-                          fontWeight: FontWeight.w300,
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── High-eCPM Native Banner Ad Card ──
+                  const MotivationalQuoteAdCard(),
+
+                  const SizedBox(height: 20),
+
+                  // ── Action buttons ───────────────────
+                  if (pct < 1.0) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: onContinue,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          "Continue Tasks",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
                     ),
+                    const SizedBox(height: 12),
                   ],
-                ),
 
-                const Spacer(flex: 3),
-
-                // ── Action buttons ───────────────────
-                if (pct < 1.0) ...[
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: onContinue,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black87,
+                    child: OutlinedButton(
+                      onPressed: onClose ?? () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        elevation: 0,
                       ),
-                      child: const Text(
-                        "Continue Tasks",
+                      child: Text(
+                        pct >= 1.0 ? "That's a wrap!" : "Close Day",
                         style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontWeight: FontWeight.w500,
                           fontSize: 15,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
                 ],
-
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: onClose ?? () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: Text(
-                      pct >= 1.0 ? "That's a wrap!" : "Close Day",
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w500,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
