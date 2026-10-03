@@ -15,42 +15,25 @@ class FocusStatsService {
 
   static String _formatDate(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
 
-  static void _checkAndResetDailyStatsIfNeeded() {
+  /// Today's accumulated focus minutes.
+  static int get todayFocusMinutes {
     final now = DateTime.now();
     final todayStr = _formatDate(now);
     final lastDateStr = _box.get(_lastActiveDateKey) as String?;
-
-    if (lastDateStr == null) {
-      _box.put(_lastActiveDateKey, todayStr);
-      return;
-    }
-
     if (lastDateStr != todayStr) {
-      // Check if streak is broken (more than 1 day missed)
-      try {
-        final lastDate = DateFormat('yyyy-MM-dd').parse(lastDateStr);
-        final differenceInDays = now.difference(lastDate).inDays;
-        if (differenceInDays > 1) {
-          _box.put(_streakKey, 0);
-        }
-      } catch (_) {}
-
-      // Reset today's counts for the new day
-      _box.put(_todayMinutesKey, 0);
-      _box.put(_todaySessionsKey, 0);
-      _box.put(_lastActiveDateKey, todayStr);
+      return 0;
     }
-  }
-
-  /// Today's accumulated focus minutes.
-  static int get todayFocusMinutes {
-    _checkAndResetDailyStatsIfNeeded();
     return (_box.get(_todayMinutesKey, defaultValue: 0) as num).toInt();
   }
 
   /// Today's completed focus sessions count.
   static int get todayCompletedSessions {
-    _checkAndResetDailyStatsIfNeeded();
+    final now = DateTime.now();
+    final todayStr = _formatDate(now);
+    final lastDateStr = _box.get(_lastActiveDateKey) as String?;
+    if (lastDateStr != todayStr) {
+      return 0;
+    }
     return (_box.get(_todaySessionsKey, defaultValue: 0) as num).toInt();
   }
 
@@ -66,7 +49,19 @@ class FocusStatsService {
 
   /// Current daily streak in days.
   static int get dailyStreak {
-    _checkAndResetDailyStatsIfNeeded();
+    final now = DateTime.now();
+    final todayStr = _formatDate(now);
+    final lastDateStr = _box.get(_lastActiveDateKey) as String?;
+    if (lastDateStr == null) return 0;
+    if (lastDateStr != todayStr) {
+      try {
+        final lastDate = DateFormat('yyyy-MM-dd').parse(lastDateStr);
+        final differenceInDays = now.difference(lastDate).inDays;
+        if (differenceInDays > 1) {
+          return 0;
+        }
+      } catch (_) {}
+    }
     return (_box.get(_streakKey, defaultValue: 0) as num).toInt();
   }
 
@@ -75,15 +70,21 @@ class FocusStatsService {
   static Future<void> recordCompletedSession({required int minutes}) async {
     if (minutes <= 0) return;
 
-    _checkAndResetDailyStatsIfNeeded();
     final now = DateTime.now();
     final todayStr = _formatDate(now);
+    final lastDateStr = _box.get(_lastActiveDateKey) as String?;
 
-    final currentTodayMins = todayFocusMinutes;
-    final currentTodaySessions = todayCompletedSessions;
+    var currentTodayMins = 0;
+    var currentTodaySessions = 0;
+    var currentStreak = dailyStreak;
+
+    if (lastDateStr == todayStr) {
+      currentTodayMins = (_box.get(_todayMinutesKey, defaultValue: 0) as num).toInt();
+      currentTodaySessions = (_box.get(_todaySessionsKey, defaultValue: 0) as num).toInt();
+    }
+
     final currentTotalMins = totalFocusMinutes;
     final currentTotalSessions = totalSessions;
-    final currentStreak = dailyStreak;
 
     // Update daily streak if this is the first session today
     var nextStreak = currentStreak;
@@ -109,7 +110,6 @@ class FocusStatsService {
 
   /// Returns recent 7-day focus minutes history.
   static Map<String, int> getRecentWeeklyHistory() {
-    _checkAndResetDailyStatsIfNeeded();
     final rawHistory = _box.get(_historyKey, defaultValue: <dynamic, dynamic>{});
     final history = Map<String, int>.from(
       (rawHistory as Map).map((k, v) => MapEntry(k.toString(), (v as num).toInt())),

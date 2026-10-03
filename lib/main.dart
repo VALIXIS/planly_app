@@ -10,6 +10,7 @@ import 'features/tasks/ui/notification_reliability_wizard_screen.dart';
 import 'features/tasks/ui/onboarding_screen.dart';
 import 'features/tasks/ui/settings_screen.dart';
 import 'features/tasks/ui/splash_screen.dart';
+import 'features/tasks/ui/stats_screen.dart';
 import 'services/admob_service.dart';
 import 'services/app_state_service.dart';
 import 'services/notification_service.dart';
@@ -287,6 +288,16 @@ class _MainScreenState extends State<MainScreen> {
           appBar: AppBar(
             title: const Text('Planly'),
             actions: [
+              IconButton(
+                tooltip: 'Productivity & Habits',
+                icon: const Icon(Icons.insights_rounded),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const StatsScreen()),
+                  );
+                },
+              ),
               IconButton(
                 tooltip: isDark ? 'Switch to Light' : 'Switch to Dark',
                 icon: Icon(

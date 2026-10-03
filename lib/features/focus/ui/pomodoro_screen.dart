@@ -8,6 +8,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../../services/task_action_service.dart';
 import '../../tasks/models/task_model.dart';
+import '../../tasks/ui/stats_screen.dart';
+import '../../tasks/ui/widgets/habit_heatmap_widget.dart';
 import '../services/ambient_audio_service.dart';
 import '../services/focus_stats_service.dart';
 
@@ -1204,6 +1206,15 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          HabitHeatmapWidget(
+            onStreakTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StatsScreen()),
+              );
+            },
           ),
         ],
       ),

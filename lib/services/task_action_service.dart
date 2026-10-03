@@ -1,6 +1,7 @@
 import 'package:hive/hive.dart';
 
 import '../features/tasks/models/task_model.dart';
+import '../features/tasks/services/habit_stats_service.dart';
 import 'notification_service.dart';
 
 class TaskActionService {
@@ -230,6 +231,12 @@ class TaskActionService {
 
     task.isCompleted = complete;
     await task.save();
+
+    if (complete) {
+      await HabitStatsService.recordTaskCompletion(task.title);
+    } else {
+      await HabitStatsService.unrecordTaskCompletion(task.title);
+    }
 
     final key = task.key;
     if (key is int) {
