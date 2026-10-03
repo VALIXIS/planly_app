@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import '../models/task_model.dart';
 import 'add_task_screen.dart';
 import 'daily_reflection_screen.dart';
+import 'stats_screen.dart';
 import 'task_search_delegate.dart';
 import 'widgets/home_group_header.dart';
 import 'widgets/quick_capture_sheet.dart';
@@ -780,17 +781,28 @@ class _HomeScreenState extends State<HomeScreen>
                               // 🔥 Streak badge
                               Column(
                                 children: [
-                                  _HeaderBadge(
-                                    isDark: isDark,
-                                    color: _streak > 0 ? Colors.orange : Colors.grey.shade400,
-                                    bgColor: _streak > 0
-                                        ? Colors.orange.withValues(alpha: 0.12)
-                                        : (isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade100),
-                                    borderColor: _streak > 0
-                                        ? Colors.orange.withValues(alpha: 0.3)
-                                        : Colors.transparent,
-                                    icon: Icons.local_fire_department_rounded,
-                                    label: "$_streak",
+                                  GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const StatsScreen(),
+                                        ),
+                                      );
+                                    },
+                                    child: _HeaderBadge(
+                                      isDark: isDark,
+                                      color: _streak > 0 ? Colors.orange : Colors.grey.shade400,
+                                      bgColor: _streak > 0
+                                          ? Colors.orange.withValues(alpha: 0.12)
+                                          : (isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade100),
+                                      borderColor: _streak > 0
+                                          ? Colors.orange.withValues(alpha: 0.3)
+                                          : Colors.transparent,
+                                      icon: Icons.local_fire_department_rounded,
+                                      label: "$_streak",
+                                    ),
                                   ),
                                   const SizedBox(height: 6),
                                   // 🎯 Focus mode badge
