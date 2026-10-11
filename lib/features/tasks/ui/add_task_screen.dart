@@ -652,7 +652,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     }
 
     final notifService = NotificationService();
-    final box = Hive.box<Task>('tasks');
+    final box = Hive.isBoxOpen('tasks')
+        ? Hive.box<Task>('tasks')
+        : await Hive.openBox<Task>('tasks');
     final recurrenceRule = _buildRecurrenceRule();
 
     setState(() {
@@ -660,9 +662,22 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     });
 
     try {
-      if (widget.task != null) {
+      final bool isExistingPersistedTask =
+          widget.task != null && widget.task!.isInBox;
+
+      if (isExistingPersistedTask) {
         final task = widget.task!;
-        await notifService.cancelNotification(task.key as int);
+        final rawKey = task.key;
+        final int? existingId =
+            rawKey is int ? rawKey : int.tryParse(rawKey?.toString() ?? '');
+
+        if (existingId != null) {
+          try {
+            await notifService.cancelNotification(existingId);
+          } catch (notifErr) {
+            debugPrint('Failed to cancel old notification: $notifErr');
+          }
+        }
 
         task.title = title;
         task.category = selectedCategory;
@@ -674,19 +689,24 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         task.skipMissedRecurrences = skipMissedRecurrences;
         task.reminderEnabled = enableReminder;
         task.reminderTime = null;
-        task.reminderMinutesBefore = enableReminder ? reminderMinutesBefore : null;
+        task.reminderMinutesBefore =
+            enableReminder ? reminderMinutesBefore : null;
         task.subtasks = _subtasks.isNotEmpty ? _subtasks : null;
         await task.save();
 
-        if (enableReminder && reminderAt != null) {
-          await notifService.scheduleNotification(
-            id: task.key as int,
-            title: task.title,
-            body: task.description?.isNotEmpty == true
-                ? task.description!
-                : 'Your task is due now!',
-            scheduledTime: reminderAt,
-          );
+        if (enableReminder && reminderAt != null && existingId != null) {
+          try {
+            await notifService.scheduleNotification(
+              id: existingId,
+              title: task.title,
+              body: task.description?.isNotEmpty == true
+                  ? task.description!
+                  : 'Your task is due now!',
+              scheduledTime: reminderAt,
+            );
+          } catch (notifErr) {
+            debugPrint('Failed to schedule reminder: $notifErr');
+          }
         }
 
         if (mounted) Navigator.pop(context);
@@ -697,7 +717,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         title: title,
         category: selectedCategory,
         dueDate: combinedDateTime,
-        isCompleted: false,
+        isCompleted: widget.task?.isCompleted ?? false,
         description: _descController.text.trim(),
         priority: selectedPriority,
         tags: selectedTags,
@@ -709,23 +729,29 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         subtasks: _subtasks.isNotEmpty ? _subtasks : null,
       );
 
-      final key = await box.add(newTask);
+      final dynamic rawKey = await box.add(newTask);
+      final int? newId =
+          rawKey is int ? rawKey : int.tryParse(rawKey?.toString() ?? '');
 
-      if (enableReminder && reminderAt != null) {
-        await notifService.scheduleNotification(
-          id: key,
-          title: title,
-          body: _descController.text.trim().isNotEmpty
-              ? _descController.text.trim()
-              : 'Your task is due now!',
-          scheduledTime: reminderAt,
-        );
+      if (enableReminder && reminderAt != null && newId != null) {
+        try {
+          await notifService.scheduleNotification(
+            id: newId,
+            title: title,
+            body: _descController.text.trim().isNotEmpty
+                ? _descController.text.trim()
+                : 'Your task is due now!',
+            scheduledTime: reminderAt,
+          );
+        } catch (notifErr) {
+          debugPrint('Failed to schedule reminder: $notifErr');
+        }
       }
 
       if (mounted) Navigator.pop(context);
     } catch (e, stack) {
       debugPrint('Task save error: \n$e\n$stack');
-      _showMessage('Could not save task. Please try again.');
+      _showMessage('Could not save task: ${e.toString().replaceAll("Exception:", "").trim()}');
     } finally {
       if (mounted) {
         setState(() {

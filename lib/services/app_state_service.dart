@@ -38,12 +38,17 @@ class AppStateService {
 
   static Future<void> setThemeMode(ThemeMode mode) async {
     themeNotifier.value = mode;
-    await _settingsBox.put('isDarkMode', mode == ThemeMode.dark);
+    final bool isDark = mode == ThemeMode.dark;
+    if (_settingsBox.get('isDarkMode') != isDark) {
+      await _settingsBox.put('isDarkMode', isDark);
+    }
   }
 
   static Future<void> setOledMode(bool value) async {
     oledModeNotifier.value = value;
-    await _settingsBox.put('isOledMode', value);
+    if (_settingsBox.get('isOledMode') != value) {
+      await _settingsBox.put('isOledMode', value);
+    }
     if (value && themeNotifier.value != ThemeMode.dark) {
       await setThemeMode(ThemeMode.dark);
     }
@@ -61,17 +66,24 @@ class AppStateService {
 
   static Future<void> setAccentColor(Color color) async {
     accentColorNotifier.value = color;
-    await _settingsBox.put('accentColor', color.toARGB32());
+    final int argb = color.toARGB32();
+    if (_settingsBox.get('accentColor') != argb) {
+      await _settingsBox.put('accentColor', argb);
+    }
   }
 
   static Future<void> setOnboardingDone() async {
-    await _settingsBox.put('onboardingDone', true);
+    if (_settingsBox.get('onboardingDone') != true) {
+      await _settingsBox.put('onboardingDone', true);
+    }
   }
 
   static bool get isReliabilityWizardSeen =>
       _settingsBox.get(reliabilityWizardSeenKey, defaultValue: false) as bool;
 
   static Future<void> setReliabilityWizardSeen(bool value) async {
-    await _settingsBox.put(reliabilityWizardSeenKey, value);
+    if (_settingsBox.get(reliabilityWizardSeenKey) != value) {
+      await _settingsBox.put(reliabilityWizardSeenKey, value);
+    }
   }
 }

@@ -8,6 +8,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/theme/oled_theme.dart';
 import '../../../services/app_state_service.dart';
 import '../../../services/backup_restore_service.dart';
+import '../../../services/hive_storage_service.dart';
 import '../../../services/notification_service.dart';
 import '../../common/widgets/reliable_banner_ad.dart';
 import '../models/task_model.dart';
@@ -956,6 +957,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               )
                             : const Icon(Icons.chevron_right_rounded),
                         onTap: _isBackupLoading ? null : _importBackup,
+                      ),
+                      Divider(
+                        height: 1,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.06),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(
+                                alpha: isDark ? 0.22 : 0.14),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.cleaning_services_rounded,
+                            color: Colors.amber,
+                            size: 20,
+                          ),
+                        ),
+                        title: const Text('Compact Database'),
+                        subtitle: Text(
+                          'Reclaim unused storage & optimize Hive database boxes.',
+                          style: TextStyle(fontSize: 12, color: subtitleColor),
+                        ),
+                        trailing: const Icon(Icons.flash_on_rounded, size: 18, color: Colors.amber),
+                        onTap: () async {
+                          await HiveStorageService.compactAllBoxes();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('⚡ Database compacted & storage optimized!'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/fluid_bottom_sheet.dart';
 import '../../../core/theme/oled_theme.dart';
 import '../../../services/app_state_service.dart';
+import '../../../services/hive_storage_service.dart';
 import '../../../services/missed_reminder_service.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/task_action_service.dart';
@@ -328,32 +329,6 @@ class _HomeScreenState extends State<HomeScreen>
     // Example categories, adjust as needed
     final List<String> categories = ["Work", "Personal", "Shopping", "Others"];
 
-    Task? _getSuggestedTask(List<Task> tasks) {
-      final pendingTasks = tasks.where((task) => !task.isCompleted).toList();
-      if (pendingTasks.isEmpty) {
-        return null;
-      }
-
-      const priorityOrder = {'High': 0, 'Medium': 1, 'Low': 2};
-      pendingTasks.sort((a, b) {
-        final aDue = a.dueDate;
-        final bDue = b.dueDate;
-        if (aDue != null && bDue != null) {
-          final dueComparison = aDue.compareTo(bDue);
-          if (dueComparison != 0) return dueComparison;
-        } else if (aDue != null) {
-          return -1;
-        } else if (bDue != null) {
-          return 1;
-        }
-
-        return (priorityOrder[a.priority] ?? 1).compareTo(
-          priorityOrder[b.priority] ?? 1,
-        );
-      });
-
-      return pendingTasks.first;
-    }
   FilterType selectedFilter = FilterType.all;
   String searchQuery = "";
 
@@ -404,47 +379,6 @@ class _HomeScreenState extends State<HomeScreen>
     if (hour < 12) return "Good morning";
     if (hour < 17) return "Good afternoon";
     return "Good evening";
-  }
-
-  Map<String, List<Task>> _buildSmartGroups(List<Task> tasks, DateTime now) {
-    final groups = <String, List<Task>>{
-      "Overdue": [],
-      "Now": [],
-      "Later Today": [],
-      "Tomorrow": [],
-      "This Week": [],
-      "Later": [],
-      "Anytime": [],
-    };
-    final tomorrow = DateTime(now.year, now.month, now.day + 1);
-    final dayAfterTomorrow = DateTime(now.year, now.month, now.day + 2);
-    final nextWeek = now.add(const Duration(days: 7));
-    final threeHoursLater = now.add(const Duration(hours: 3));
-
-    for (final task in tasks) {
-      final due = task.dueDate;
-      if (due == null) {
-        groups["Anytime"]!.add(task);
-        continue;
-      }
-      if (due.isBefore(now) && !task.isCompleted) {
-        groups["Overdue"]!.add(task);
-      } else if (!due.isBefore(now) &&
-          due.isBefore(threeHoursLater) &&
-          isSameDay(due, now)) {
-        groups["Now"]!.add(task);
-      } else if (isSameDay(due, now)) {
-        groups["Later Today"]!.add(task);
-      } else if (due.isAfter(tomorrow.subtract(const Duration(seconds: 1))) &&
-          due.isBefore(dayAfterTomorrow)) {
-        groups["Tomorrow"]!.add(task);
-      } else if (due.isAfter(dayAfterTomorrow) && due.isBefore(nextWeek)) {
-        groups["This Week"]!.add(task);
-      } else if (due.isAfter(nextWeek)) {
-        groups["Later"]!.add(task);
-      }
-    }
-    return groups;
   }
 
   Color _groupHeaderColor(String groupName, Color primary) {
@@ -510,102 +444,38 @@ class _HomeScreenState extends State<HomeScreen>
             builder: (context, Box<Task> box, _) {
           // ...existing code...
               final allTasks = box.values.toList();
-              final missedItems = _collectMissedReminderItems();
               final now = DateTime.now();
-              final suggestedTask = _getSuggestedTask(allTasks);
 
-              int todayCount = 0;
-              int upcomingCount = 0;
-              int pendingCount = 0;
-              int completedCount = 0;
-              final todayTasks = <Task>[];
-              final query = searchQuery.trim().toLowerCase();
-              final tasks = <Task>[];
+              final indexedResult = HiveStorageService.queryAndIndexTasks(
+                allTasks: allTasks,
+                searchQuery: searchQuery,
+                selectedFilterName: selectedFilter.name,
+                categories: categories,
+                now: now,
+              );
 
-              for (final task in allTasks) {
-                final due = task.dueDate;
-                final isToday = due != null && isSameDay(due, now);
-                final matchesSearch =
-                    query.isEmpty || task.title.toLowerCase().contains(query);
+              final missedItems = _collectMissedReminderItems();
+              final suggestedTask = indexedResult.suggestedTask;
+              final todayTasks = indexedResult.todayTasks;
+              final todayCount = indexedResult.todayCount;
+              final upcomingCount = indexedResult.upcomingCount;
+              final pendingCount = indexedResult.pendingCount;
+              final completedCount = indexedResult.completedCount;
 
-                if (isToday) {
-                  todayCount += 1;
-                  todayTasks.add(task);
-                }
-
-                if (due != null && due.isAfter(now)) {
-                  upcomingCount += 1;
-                }
-
-                if (task.isCompleted) {
-                  completedCount += 1;
-                } else {
-                  pendingCount += 1;
-                }
-
-                if (!matchesSearch) continue;
-
-                final includeTask = switch (selectedFilter) {
-                  FilterType.all => true,
-                  FilterType.today => isToday,
-                  FilterType.upcoming => due != null && due.isAfter(now),
-                  FilterType.pending => !task.isCompleted,
-                  FilterType.completed => task.isCompleted,
-                };
-
-                if (includeTask) {
-                  tasks.add(task);
-                }
-              }
-
-              final todayCompleted = todayTasks.where((t) => t.isCompleted).length;
+              final todayCompleted =
+                  todayTasks.where((t) => t.isCompleted).length;
               final todayTotal = todayTasks.length;
               final reflectionPct = todayTotal == 0
                   ? 0.0
                   : todayCompleted / todayTotal;
               final todayStamp = _dateStamp(now);
 
-              const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
-              void sortGroup(List<Task> group) {
-                group.sort((a, b) {
-                  if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
-                  return (priorityOrder[a.priority] ?? 1).compareTo(
-                    priorityOrder[b.priority] ?? 1,
-                  );
-                });
-              }
-
-              Map<String, List<Task>> displayGroups = {};
-              bool useSmartFlow =
+              final bool useSmartFlow =
                   selectedFilter == FilterType.all ||
                   selectedFilter == FilterType.today;
 
-              if (useSmartFlow) {
-                displayGroups = _buildSmartGroups(tasks, now);
-                for (final g in displayGroups.values) {
-                  sortGroup(g);
-                }
-              } else {
-                for (final cat in categories) {
-                  final catTasks = tasks.where((t) => t.category == cat).toList();
-                  if (catTasks.isNotEmpty) {
-                    sortGroup(catTasks);
-                    displayGroups[cat] = catTasks;
-                  }
-                }
-                final uncategorized = tasks
-                    .where(
-                      (t) => t.category == null || !categories.contains(t.category),
-                    )
-                    .toList();
-                if (uncategorized.isNotEmpty) {
-                  sortGroup(uncategorized);
-                  displayGroups["Others"] =
-                      (displayGroups["Others"] ?? []) + uncategorized;
-                }
-              }
-
-              final taskRows = _buildTaskRows(displayGroups, useSmartFlow, primary);
+              final taskRows = _buildTaskRows(
+                  indexedResult.smartGroups, useSmartFlow, primary);
               final bool isEmpty = taskRows.isEmpty;
 
               if (todayTotal > 0 &&

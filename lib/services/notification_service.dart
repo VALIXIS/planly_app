@@ -346,13 +346,24 @@ class NotificationService {
     try {
       await doSchedule(_scheduleMode);
     } on PlatformException catch (error) {
-      if (error.code == 'exact_alarms_not_permitted' &&
-          _scheduleMode == AndroidScheduleMode.exactAllowWhileIdle) {
+      final isExactAlarmIssue = error.code == 'exact_alarms_not_permitted' ||
+          (error.message?.toLowerCase().contains('exact') ?? false) ||
+          (error.message?.toLowerCase().contains('securityexception') ?? false);
+
+      if (isExactAlarmIssue &&
+          _scheduleMode != AndroidScheduleMode.inexactAllowWhileIdle) {
         _scheduleMode = AndroidScheduleMode.inexactAllowWhileIdle;
-        await doSchedule(_scheduleMode);
-        return;
+        try {
+          await doSchedule(_scheduleMode);
+          return;
+        } catch (inexactError) {
+          debugPrint('Inexact schedule fallback error: $inexactError');
+          return;
+        }
       }
-      rethrow;
+      debugPrint('Notification schedule PlatformException: $error');
+    } catch (error) {
+      debugPrint('Notification schedule general error: $error');
     }
   }
 
