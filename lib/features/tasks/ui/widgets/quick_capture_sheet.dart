@@ -99,12 +99,16 @@ class _QuickCaptureSheetState extends State<QuickCaptureSheet> {
       final key = await box.add(newTask);
 
       if (dueDate != null && dueDate.isAfter(DateTime.now())) {
-        await NotificationService().scheduleNotification(
-          id: key,
-          title: title,
-          body: 'Task due now',
-          scheduledTime: dueDate,
-        );
+        try {
+          await NotificationService().scheduleNotification(
+            id: key,
+            title: title,
+            body: 'Task due now',
+            scheduledTime: dueDate,
+          );
+        } catch (notifErr) {
+          debugPrint('Quick capture notification error: $notifErr');
+        }
       }
 
       if (mounted) {

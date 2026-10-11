@@ -25,6 +25,7 @@ class TaskAdapter extends TypeAdapter<Task> {
       priority: fields[5] as String,
       recurrenceRule: fields[6] as String?,
       reminderTime: fields[7] as DateTime?,
+      reminderMinutesBefore: fields[8] as int?,
       reminderEnabled: (fields[9] as bool?) ?? true,
       skipMissedRecurrences: (fields[10] as bool?) ?? true,
       tags: (fields[11] as List?)?.cast<String>() ?? const [],

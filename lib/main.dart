@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/theme/oled_theme.dart';
-import 'features/tasks/models/tag_model.dart';
-import 'features/tasks/models/task_model.dart';
 import 'features/tasks/ui/calendar_screen.dart';
 import 'features/tasks/ui/home_screen.dart';
 import 'features/tasks/ui/notification_reliability_wizard_screen.dart';
@@ -17,23 +15,12 @@ import 'services/app_state_service.dart';
 import 'services/notification_service.dart';
 import 'services/task_action_service.dart';
 
+import 'services/hive_storage_service.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Hive.initFlutter();
-  Hive.registerAdapter(TaskAdapter());
-  Hive.registerAdapter(TagModelAdapter());
-  Hive.registerAdapter(TaskSubtaskAdapter());
-  await Hive.openBox<Task>('tasks');
-  final tagBox = await Hive.openBox<TagModel>('tags');
-  if (tagBox.isEmpty) {
-    await tagBox.addAll([
-      TagModel(name: 'work', colorValue: 0xFF42A5F5),
-      TagModel(name: 'personal', colorValue: 0xFF66BB6A),
-      TagModel(name: 'urgent', colorValue: 0xFFEF5350),
-    ]);
-  }
-  await Hive.openBox('settings');
+  await HiveStorageService.initializeStorage();
 
   AppStateService.loadPersistedSettings();
 
