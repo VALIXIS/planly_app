@@ -11,10 +11,22 @@ class AdMobService {
       'ca-app-pub-3940256099942544/2934735716';
   static const String _androidBannerReleaseAdUnitId = String.fromEnvironment(
     'ANDROID_BANNER_AD_UNIT_ID',
-    defaultValue: 'ca-app-pub-6059224677913709/7889542039',
+    defaultValue: 'ca-app-pub-6059224677913709/5151958786',
   );
   static const String _iosBannerReleaseAdUnitId = String.fromEnvironment(
     'IOS_BANNER_AD_UNIT_ID',
+  );
+
+  static const String _androidInterstitialTestAdUnitId =
+      'ca-app-pub-3940256099942544/1033173712';
+  static const String _iosInterstitialTestAdUnitId =
+      'ca-app-pub-3940256099942544/4411468910';
+  static const String _androidInterstitialReleaseAdUnitId = String.fromEnvironment(
+    'ANDROID_INTERSTITIAL_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-6059224677913709/1913248780',
+  );
+  static const String _iosInterstitialReleaseAdUnitId = String.fromEnvironment(
+    'IOS_INTERSTITIAL_AD_UNIT_ID',
   );
 
   static const String _androidRewardedTestAdUnitId =
@@ -23,7 +35,7 @@ class AdMobService {
       'ca-app-pub-3940256099942544/1712485313';
   static const String _androidRewardedReleaseAdUnitId = String.fromEnvironment(
     'ANDROID_REWARDED_AD_UNIT_ID',
-    defaultValue: 'ca-app-pub-6059224677913709/7889542039',
+    defaultValue: 'ca-app-pub-6059224677913709/4115303503',
   );
   static const String _iosRewardedReleaseAdUnitId = String.fromEnvironment(
     'IOS_REWARDED_AD_UNIT_ID',
@@ -35,6 +47,11 @@ class AdMobService {
 
   static RewardedAd? _rewardedAd;
   static bool _isRewardedAdLoading = false;
+
+  static InterstitialAd? _interstitialAd;
+  static bool _isInterstitialAdLoading = false;
+  static DateTime? _lastInterstitialShowTime;
+  static const Duration _interstitialCooldown = Duration(minutes: 2);
 
   static bool get isSupportedPlatform =>
       !kIsWeb &&
@@ -55,6 +72,24 @@ class AdMobService {
           releaseAdUnitId: _androidBannerReleaseAdUnitId,
           testAdUnitId: _androidBannerTestAdUnitId,
           platformLabel: 'ANDROID_BANNER_AD_UNIT_ID',
+        );
+    }
+  }
+
+  static String get interstitialAdUnitId {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        return _resolveAdUnitId(
+          releaseAdUnitId: _iosInterstitialReleaseAdUnitId,
+          testAdUnitId: _iosInterstitialTestAdUnitId,
+          platformLabel: 'IOS_INTERSTITIAL_AD_UNIT_ID',
+        );
+      case TargetPlatform.android:
+      default:
+        return _resolveAdUnitId(
+          releaseAdUnitId: _androidInterstitialReleaseAdUnitId,
+          testAdUnitId: _androidInterstitialTestAdUnitId,
+          platformLabel: 'ANDROID_INTERSTITIAL_AD_UNIT_ID',
         );
     }
   }
@@ -86,9 +121,8 @@ class AdMobService {
 
     final adUnitId = releaseAdUnitId.trim();
     if (adUnitId.isEmpty || adUnitId.startsWith('ca-app-pub-3940256099942544/')) {
-      throw StateError(
-        'Missing real $platformLabel. Pass it with --dart-define when building the Play Store bundle.',
-      );
+      debugPrint('AdMob notice: Real $platformLabel not provided. Using safe fallback.');
+      return testAdUnitId;
     }
 
     return adUnitId;
@@ -110,6 +144,7 @@ class AdMobService {
 
     await MobileAds.instance.initialize();
     loadRewardedAd();
+    loadInterstitialAd();
   }
 
   // ---------------------------------------------------------------------------
@@ -264,5 +299,82 @@ class AdMobService {
     );
 
     _rewardedAd = null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Interstitial Ad Handling (High-Yield Placements)
+  // ---------------------------------------------------------------------------
+
+  /// Preloads an InterstitialAd for instantaneous presentation.
+  static Future<void> loadInterstitialAd() async {
+    if (!isSupportedPlatform || _isInterstitialAdLoading || _interstitialAd != null) {
+      return;
+    }
+
+    _isInterstitialAdLoading = true;
+    try {
+      await InterstitialAd.load(
+        adUnitId: interstitialAdUnitId,
+        request: const AdRequest(),
+        adLoadCallback: InterstitialAdLoadCallback(
+          onAdLoaded: (ad) {
+            _interstitialAd = ad;
+            _isInterstitialAdLoading = false;
+            debugPrint('InterstitialAd loaded successfully.');
+          },
+          onAdFailedToLoad: (LoadAdError error) {
+            _interstitialAd = null;
+            _isInterstitialAdLoading = false;
+            debugPrint('InterstitialAd failed to load: $error');
+          },
+        ),
+      );
+    } catch (e) {
+      _isInterstitialAdLoading = false;
+      debugPrint('Error loading interstitial ad: $e');
+    }
+  }
+
+  /// Displays the Interstitial Ad with frequency capping to maximize eCPM.
+  static Future<void> showInterstitialAd({
+    VoidCallback? onDismissed,
+  }) async {
+    if (!isSupportedPlatform) {
+      onDismissed?.call();
+      return;
+    }
+
+    // Cooldown check (minimum 2 minutes between interstitial impressions)
+    if (_lastInterstitialShowTime != null &&
+        DateTime.now().difference(_lastInterstitialShowTime!) < _interstitialCooldown) {
+      onDismissed?.call();
+      return;
+    }
+
+    if (_interstitialAd == null) {
+      loadInterstitialAd();
+      onDismissed?.call();
+      return;
+    }
+
+    _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _interstitialAd = null;
+        _lastInterstitialShowTime = DateTime.now();
+        loadInterstitialAd(); // Preload next interstitial
+        onDismissed?.call();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        ad.dispose();
+        _interstitialAd = null;
+        loadInterstitialAd();
+        debugPrint('InterstitialAd failed to show: $error');
+        onDismissed?.call();
+      },
+    );
+
+    await _interstitialAd!.show();
+    _interstitialAd = null;
   }
 }

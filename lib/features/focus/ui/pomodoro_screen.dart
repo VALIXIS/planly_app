@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../../core/theme/fluid_bottom_sheet.dart';
+import '../../../services/admob_service.dart';
 import '../../../services/task_action_service.dart';
 import '../../tasks/models/task_model.dart';
 import '../../tasks/ui/stats_screen.dart';
@@ -290,6 +291,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogCtx);
+                AdMobService.showInterstitialAd();
                 _switchMode(PomodoroMode.focus);
               },
               child: const Text('Stay in Focus'),
@@ -297,6 +299,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(dialogCtx);
+                AdMobService.showInterstitialAd();
                 if (isLongBreakDue) {
                   _completedSessionsInRound = 0;
                 }

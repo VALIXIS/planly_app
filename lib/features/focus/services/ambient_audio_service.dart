@@ -107,15 +107,38 @@ class AmbientAudioService {
     }
 
     try {
-      final filePath = await _getOrCreateSoundFile(sound);
-      if (filePath != null) {
+      final assetPath = getSoundAsset(sound);
+      if (assetPath != null) {
         await _ambientPlayer.stop();
-        await _ambientPlayer.setSource(DeviceFileSource(filePath));
+        try {
+          await _ambientPlayer.setSource(AssetSource(assetPath));
+        } catch (_) {
+          final filePath = await _getOrCreateSoundFile(sound);
+          if (filePath != null) {
+            await _ambientPlayer.setSource(DeviceFileSource(filePath));
+          }
+        }
         await _ambientPlayer.setVolume(_volume);
         await _ambientPlayer.resume();
       }
     } catch (e) {
       debugPrint('Error playing ambient sound $sound: $e');
+    }
+  }
+
+  /// Maps ambient sound mode to bundled high-fidelity asset file.
+  static String? getSoundAsset(AmbientSound sound) {
+    switch (sound) {
+      case AmbientSound.rain:
+        return 'audio/rain.mp3';
+      case AmbientSound.cozyCafe:
+        return 'audio/cozy_cafe.mp3';
+      case AmbientSound.whiteNoise:
+        return 'audio/white_noise.mp3';
+      case AmbientSound.deepSpaceLoFi:
+        return 'audio/deep_space_lofi.mp3';
+      case AmbientSound.none:
+        return null;
     }
   }
 
@@ -141,13 +164,17 @@ class AmbientAudioService {
     }
 
     try {
-      final filePath = await _getOrCreateTickFile();
-      if (filePath != null) {
-        await _tickPlayer.stop();
-        await _tickPlayer.setSource(DeviceFileSource(filePath));
-        await _tickPlayer.setVolume(0.4);
-        await _tickPlayer.resume();
+      await _tickPlayer.stop();
+      try {
+        await _tickPlayer.setSource(AssetSource('audio/tick.mp3'));
+      } catch (_) {
+        final filePath = await _getOrCreateTickFile();
+        if (filePath != null) {
+          await _tickPlayer.setSource(DeviceFileSource(filePath));
+        }
       }
+      await _tickPlayer.setVolume(0.4);
+      await _tickPlayer.resume();
     } catch (e) {
       debugPrint('Error playing ticking sound: $e');
     }
@@ -156,13 +183,17 @@ class AmbientAudioService {
   /// Plays a warm completion chime for when intervals complete.
   Future<void> playCompletionChime() async {
     try {
-      final filePath = await _getOrCreateChimeFile();
-      if (filePath != null) {
-        await _chimePlayer.stop();
-        await _chimePlayer.setSource(DeviceFileSource(filePath));
-        await _chimePlayer.setVolume(0.85);
-        await _chimePlayer.resume();
+      await _chimePlayer.stop();
+      try {
+        await _chimePlayer.setSource(AssetSource('audio/chime.mp3'));
+      } catch (_) {
+        final filePath = await _getOrCreateChimeFile();
+        if (filePath != null) {
+          await _chimePlayer.setSource(DeviceFileSource(filePath));
+        }
       }
+      await _chimePlayer.setVolume(0.85);
+      await _chimePlayer.resume();
     } catch (e) {
       debugPrint('Error playing completion chime: $e');
     }

@@ -1059,7 +1059,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: Column(
               children: [
-                ReliableBannerAd(adUnitId: 'ca-app-pub-6059224677913709/7889542039'),
+                const ReliableBannerAd(),
               ],
             ),
           ),

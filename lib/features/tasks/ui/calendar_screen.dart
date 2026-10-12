@@ -196,7 +196,7 @@ class _CalendarScreenState extends State<CalendarScreen>
               ),
             ),
             ),
-            ReliableBannerAd(adUnitId: 'ca-app-pub-6059224677913709/5151958786'),
+            const ReliableBannerAd(),
           ],
         ),
       ),

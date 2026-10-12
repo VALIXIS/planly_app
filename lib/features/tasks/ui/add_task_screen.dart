@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
-import '../../../services/admob_service.dart';
-import '../../../services/ai_task_planner_service.dart';
 import '../../../services/notification_service.dart';
 import '../models/tag_model.dart';
 import '../models/task_model.dart';
+import '../services/local_task_engine.dart';
 
 class AddTaskScreen extends StatefulWidget {
   final Task? task;
@@ -53,8 +52,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   bool _subtasksAccepted = false;
   String? _aiError;
   StreamSubscription<List<TaskSubtask>>? _aiSubscription;
-  int _aiCredits = 3;
-  bool _isRewardedAdShowing = false;
+  LocalParsedTask? _detectedParsedTask;
 
   final List<String> categories = ['Work', 'Personal', 'Shopping', 'Others'];
   final List<String> priorities = ['High', 'Medium', 'Low'];
@@ -81,7 +79,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAiCredits();
+    _controller.addListener(_onTitleChanged);
 
     final defaultDue = DateTime.now().add(const Duration(minutes: 15));
     selectedDate = DateTime(defaultDue.year, defaultDue.month, defaultDue.day);
@@ -132,6 +130,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   @override
   void dispose() {
+    _controller.removeListener(_onTitleChanged);
     _aiSubscription?.cancel();
     _controller.dispose();
     _descController.dispose();
@@ -140,13 +139,75 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     super.dispose();
   }
 
-  Future<void> _loadAiCredits() async {
-    final credits = await AdMobService.getCredits();
-    if (mounted) {
+  void _onTitleChanged() {
+    final text = _controller.text.trim();
+    if (text.length >= 4) {
+      final parsed = LocalTaskEngine.parse(text);
+      if (parsed.hasInferredMetadata) {
+        if (_detectedParsedTask?.rawInput != parsed.rawInput) {
+          setState(() {
+            _detectedParsedTask = parsed;
+          });
+        }
+        return;
+      }
+    }
+    if (_detectedParsedTask != null) {
       setState(() {
-        _aiCredits = credits;
+        _detectedParsedTask = null;
       });
     }
+  }
+
+  void _applySmartAutoFill() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      _showMessage('Type or speak your task details in the title first.');
+      return;
+    }
+
+    final parsed = LocalTaskEngine.parse(text);
+    setState(() {
+      _controller.text = parsed.cleanTitle;
+      if (parsed.dueDate != null) {
+        selectedDate = parsed.dueDate!;
+      }
+      if (parsed.dueTime != null) {
+        selectedTime = parsed.dueTime!;
+      }
+      selectedPriority = parsed.priority;
+      selectedCategory = parsed.category;
+      for (final tag in parsed.tags) {
+        if (!selectedTags.contains(tag)) {
+          selectedTags.add(tag);
+        }
+      }
+      if (parsed.reminderMinutesBefore != null) {
+        enableReminder = true;
+        reminderMinutesBefore = parsed.reminderMinutesBefore;
+        _reminderMinutesController.text =
+            parsed.reminderMinutesBefore.toString();
+      }
+      if (parsed.subtasks.isNotEmpty) {
+        for (final item in parsed.subtasks) {
+          final exists = _subtasks.any(
+            (s) =>
+                s.title.trim().toLowerCase() ==
+                item.title.trim().toLowerCase(),
+          );
+          if (!exists) {
+            _subtasks.add(TaskSubtask(
+              title: item.title,
+              minutes: item.minutes,
+              isCompleted: false,
+            ));
+          }
+        }
+      }
+      _detectedParsedTask = null;
+    });
+
+    _showMessage('✨ Auto-filled by On-Device Local Model (0 tokens used!)');
   }
 
   Future<void> _handleAiDeconstructTap() async {
@@ -156,90 +217,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       return;
     }
 
-    if (_aiCredits > 0) {
-      final newCredits = await AdMobService.consumeCredit();
-      if (mounted) {
-        setState(() {
-          _aiCredits = newCredits;
-        });
-      }
-      await _deconstructTaskWithAi();
-    } else {
-      await _showWatchAdDialog();
-    }
-  }
-
-  Future<void> _showWatchAdDialog() async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.stars_rounded, color: Colors.amber),
-            SizedBox(width: 8),
-            Text('Out of AI Credits'),
-          ],
-        ),
-        content: const Text(
-          'You have 0 free AI credits remaining. Watch a short video ad to instantly claim +5 bonus AI deconstruction credits!',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.ondemand_video_rounded),
-            label: const Text('Watch Ad (+5 Credits)'),
-          ),
-        ],
-      ),
-    );
-
-    if (result == true) {
-      await _watchRewardedAdAndDeconstruct();
-    }
-  }
-
-  Future<void> _watchRewardedAdAndDeconstruct() async {
-    if (_isRewardedAdShowing) return;
-
-    setState(() {
-      _isRewardedAdShowing = true;
-    });
-
-    _showMessage('Loading rewarded video ad...');
-
-    await AdMobService.showRewardedAd(
-      onRewardGranted: (newCredits) async {
-        if (!mounted) return;
-        setState(() {
-          _aiCredits = newCredits;
-          _isRewardedAdShowing = false;
-        });
-        _showMessage('+5 AI credits added!');
-
-        final title = _controller.text.trim();
-        if (title.isNotEmpty) {
-          final remaining = await AdMobService.consumeCredit();
-          if (mounted) {
-            setState(() {
-              _aiCredits = remaining;
-            });
-          }
-          await _deconstructTaskWithAi();
-        }
-      },
-      onError: (error) {
-        if (!mounted) return;
-        setState(() {
-          _isRewardedAdShowing = false;
-        });
-        _showMessage('Could not load ad. Please try again.');
-      },
-    );
+    await _deconstructTaskWithAi();
   }
 
   Future<void> _deconstructTaskWithAi() async {
@@ -260,10 +238,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       _subtasksAccepted = false;
     });
 
-    final service = AiTaskPlannerService();
-
     try {
-      final stream = service.deconstructTaskStream(title);
+      final stream = LocalTaskEngine.deconstructTaskStreamLocally(title);
       _aiSubscription = stream.listen(
         (subtasks) {
           if (mounted) {
@@ -274,14 +250,11 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         },
         onError: (error) {
           if (mounted) {
-            final msg = error is AiTaskPlannerException
-                ? error.message
-                : 'AI task generation failed. Please try again.';
             setState(() {
               _isDeconstructing = false;
-              _aiError = msg;
+              _aiError = 'Local task decomposition failed.';
             });
-            _showMessage(msg);
+            _showMessage('Local task decomposition failed.');
           }
         },
         onDone: () {
@@ -294,14 +267,11 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       );
     } catch (e) {
       if (mounted) {
-        final msg = e is AiTaskPlannerException
-            ? e.message
-            : 'AI task generation failed. Please try again.';
         setState(() {
           _isDeconstructing = false;
-          _aiError = msg;
+          _aiError = 'Local task decomposition failed.';
         });
-        _showMessage(msg);
+        _showMessage('Local task decomposition failed.');
       }
     }
   }
@@ -878,10 +848,100 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                               textInputAction: TextInputAction.next,
                               validator: _validateTitle,
                               decoration: fieldDecoration(
-                                hint: 'Enter task title',
+                                hint: 'Enter task title (e.g. Meeting tomorrow 3pm !high #Work)',
                                 prefix: const Icon(Icons.task_alt),
                               ),
                             ),
+                            if (_detectedParsedTask != null &&
+                                _detectedParsedTask!.hasInferredMetadata) ...[
+                              const SizedBox(height: 8),
+                              InkWell(
+                                onTap: _applySmartAutoFill,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primaryContainer
+                                        .withValues(alpha: 0.5),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: colorScheme.primary
+                                          .withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.psychology_rounded,
+                                        size: 20,
+                                        color: colorScheme.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Local Model Inferred (0 Tokens):',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: colorScheme.primary,
+                                              ),
+                                            ),
+                                            Text(
+                                              [
+                                                if (_detectedParsedTask!
+                                                        .dueDate !=
+                                                    null)
+                                                  DateFormat('MMM d').format(
+                                                      _detectedParsedTask!
+                                                          .dueDate!),
+                                                if (_detectedParsedTask!
+                                                        .dueTime !=
+                                                    null)
+                                                  _detectedParsedTask!.dueTime!
+                                                      .format(context),
+                                                _detectedParsedTask!.priority,
+                                                _detectedParsedTask!.category,
+                                                if (_detectedParsedTask!
+                                                    .tags.isNotEmpty)
+                                                  '#${_detectedParsedTask!.tags.join(' #')}',
+                                              ].join(' • '),
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      FilledButton.tonal(
+                                        onPressed: _applySmartAutoFill,
+                                        style: FilledButton.styleFrom(
+                                          visualDensity: VisualDensity.compact,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Auto-Fill',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 10),
                             Wrap(
                               crossAxisAlignment: WrapCrossAlignment.center,
@@ -889,10 +949,38 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                               runSpacing: 8,
                               children: [
                                 OutlinedButton.icon(
-                                  onPressed: (_isDeconstructing || _isRewardedAdShowing)
+                                  onPressed: _applySmartAutoFill,
+                                  icon: Icon(
+                                    Icons.bolt_rounded,
+                                    size: 18,
+                                    color: colorScheme.primary,
+                                  ),
+                                  label: Text(
+                                    'Local Auto-Fill',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                      horizontal: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: colorScheme.primary
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                  ),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: _isDeconstructing
                                       ? null
                                       : _handleAiDeconstructTap,
-                                  icon: (_isDeconstructing || _isRewardedAdShowing)
+                                  icon: _isDeconstructing
                                       ? const SizedBox(
                                           width: 16,
                                           height: 16,
@@ -908,9 +996,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                   label: Text(
                                     _isDeconstructing
                                         ? 'Deconstructing...'
-                                        : _isRewardedAdShowing
-                                            ? 'Loading Ad...'
-                                            : 'Deconstruct with AI',
+                                        : 'Deconstruct with AI',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                       color: colorScheme.primary,
@@ -919,7 +1005,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                   style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 12,
-                                      horizontal: 16,
+                                      horizontal: 14,
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
@@ -936,39 +1022,28 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                     vertical: 8,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: _aiCredits > 0
-                                        ? colorScheme.primary.withValues(alpha: 0.1)
-                                        : Colors.amber.withValues(alpha: 0.15),
+                                    color: Colors.green.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                      color: _aiCredits > 0
-                                          ? colorScheme.primary.withValues(alpha: 0.3)
-                                          : Colors.amber.shade700,
+                                      color:
+                                          Colors.green.withValues(alpha: 0.35),
                                     ),
                                   ),
-                                  child: Row(
+                                  child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(
-                                        _aiCredits > 0
-                                            ? Icons.stars_rounded
-                                            : Icons.ondemand_video_rounded,
+                                        Icons.offline_bolt_rounded,
                                         size: 16,
-                                        color: _aiCredits > 0
-                                            ? colorScheme.primary
-                                            : Colors.amber.shade800,
+                                        color: Colors.green,
                                       ),
-                                      const SizedBox(width: 4),
+                                      SizedBox(width: 4),
                                       Text(
-                                        _aiCredits > 0
-                                            ? '$_aiCredits free credits left'
-                                            : '0 credits left (+5 Ad)',
+                                        '0 Tokens • On-Device',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
-                                          color: _aiCredits > 0
-                                              ? colorScheme.primary
-                                              : Colors.amber.shade900,
+                                          color: Colors.green,
                                         ),
                                       ),
                                     ],
@@ -1004,7 +1079,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          'AI Task Breakdown',
+                                          'Local On-Device Task Breakdown',
                                           style: theme.textTheme.titleSmall
                                               ?.copyWith(
                                             fontWeight: FontWeight.bold,
