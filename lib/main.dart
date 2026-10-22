@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -19,6 +20,16 @@ import 'services/hive_storage_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Top-level crash telemetry & unhandled exception guards
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('[CRITICAL_FRAMEWORK_ERROR]: ${details.exceptionAsString()}');
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[UNHANDLED_ASYNC_ERROR]: $error\n$stack');
+    return true;
+  };
 
   await HiveStorageService.initializeStorage();
 

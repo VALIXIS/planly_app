@@ -44,3 +44,15 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/key.properties
+
+# Security & Environment Variables
+.env*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# Coverage & Profiling
+coverage/
+lcov.info
+

@@ -1,120 +1,154 @@
-# 📝 Planly — Minimalist Task Planner & Focus Assistant
+# Planly — Minimalist Task Planner & AI Focus Assistant
 
+[![CI/CD Pipeline](https://github.com/VALIXIS/planly_app/actions/workflows/ci.yml/badge.svg)](https://github.com/VALIXIS/planly_app/actions)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![Database](https://img.shields.io/badge/Storage-Hive%20NoSQL-F89820)](https://pub.dev/packages/hive)
-[![Notifications](https://img.shields.io/badge/Alarms-Local%20Notifications-4CAF50)](https://pub.dev/packages/flutter_local_notifications)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Storage](https://img.shields.io/badge/Storage-Hive%20NoSQL-F89820)](https://pub.dev/packages/hive)
+[![AI Engine](https://img.shields.io/badge/AI-Gemini%20Flash%20Deconstructor-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
+[![Tests](https://img.shields.io/badge/Tests-87%2F87%20Passing-brightgreen)](https://github.com/VALIXIS/planly_app)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
-**Planly** is a distraction-free, privacy-centric task planning and daily productivity mobile application developed in **Flutter**. Engineered to help you organize daily routines, prioritize high-impact goals, and enter deep work sessions without friction, Planly combines local task scheduling, visual calendar tracking, a dedicated Focus Mode, and mindful daily reflection into an elegant, themeable interface.
-
----
-
-## 🌟 Key Features
-
-### 📋 Intelligent Task & Priority Management
-* **Smart Organization**: Create, edit, tag, categorize, and complete tasks with due dates, exact reminder times, and recurring repeat rules (Daily, Weekly, Monthly).
-* **Smart Grouping & Dynamic Filters**: Filter instantly by Today, Upcoming, High Priority, Overdue, or custom categories (Work, Personal, Fitness, Study).
-* **Bulk Actions**: Batch select tasks to reschedule, reprioritize, or archive with a single gesture.
-
-### 🎯 Deep Work Focus Mode
-* **Single-Task Execution**: Minimize cognitive fatigue by eliminating background task clutter and highlighting only your current active priority.
-* **Integrated Pomodoro / Work Timer**: Configurable work-rest intervals with subtle audio cues to maintain high mental velocity.
-
-### 📅 Calendar Schedule & Daily Reflection
-* **Visual Calendar Grid**: View historical completion streaks and upcoming deadlines across the month.
-* **Mindful Daily Reflection**: Built-in prompts to review daily wins, capture evening notes, and set tomorrow's primary intention.
-
-### 🎨 Customization & Theming
-* **Fluid Dark & Light Modes**: Seamless system theme synchronization or manual selection.
-* **Vibrant Accent Palettes**: Personalize the interface with custom brand accents (Indigo, Emerald, Sunset Orange, Cyber Cyan).
-* **Inspirational Quotes**: Dynamic motivational quotes on the home screen and splash banner.
+**Planly** is a high-velocity, privacy-centric task planning and Pomodoro focus management suite in the **VALIXIS Enterprise Suite**. Built on Flutter with an OLED-optimized visual architecture, Planly provides AI-powered task deconstruction, local Hive NoSQL persistence, exact alarm scheduling, interactive habit heatmaps, and 3D task card interactions.
 
 ---
 
-## 🏛️ System Architecture
+## Key Capabilities
+
+### AI-Powered Task Deconstruction
+* **Gemini Flash Deconstruction**: Converts complex, ambiguous task statements into ordered, actionable subtasks with time estimates.
+* **Offline Mock Fallback**: Automatic hermetic fallback when running in offline environments or CI pipelines without API keys.
+* **Inline Subtask Engine**: Track progress dynamically with visual percentage bars and subtask checkboxes.
+
+### Focus Mode & Pomodoro Clock
+* **Integrated Pomodoro Engine**: 25/5/15 minute interval timers with audio/haptic transitions and ambient state banners.
+* **Single-Task Deep Work**: Isolates current high-priority focus targets while dimming background clutter.
+* **Habit Heatmap & Completion Velocity**: GitHub-style activity heatmaps tracking daily completions and streak milestones.
+
+### OLED & Fluid Motion UI
+* **True OLED Dark Mode**: Power-efficient true-black interface with configurable neon accent highlights.
+* **3D Perspective Cards**: Tilt-responsive task cards with spring physics and elevation depth.
+* **Alarm Reliability Wizard**: Guides users through OEM battery optimization settings to prevent missed background alarms.
+
+---
+
+## System Architecture
 
 ```
-lib/
-├── features/                # Domain-driven feature modules
-│   └── tasks/
-│       ├── models/          # Task data entities & Hive adapters
-│       │   ├── task_model.dart
-│       │   └── task_model.g.dart
-│       └── ui/              # Task list, task creation, and detail views
-│           ├── focus_mode_screen.dart
-│           ├── calendar_view_screen.dart
-│           ├── onboarding_screen.dart
-│           └── settings_screen.dart
-├── services/                # Device and business infrastructure
-│   ├── ad_service.dart      # Google Mobile Ads wrapper
-│   ├── analytics_service.dart # Local engagement metrics (zero remote telemetry)
-│   ├── notification_service.dart # Timed reminders via flutter_local_notifications
-│   ├── storage_service.dart # Hive box lifecycle and queries
-│   └── task_service.dart    # Task filtering, sorting, and repeat scheduling logic
-├── widgets/                 # Reusable cards, date pickers, priority chips
-└── main.dart                # App bootstrap & Hive box initialization
++-----------------------------------------------------------------------------+
+|                                 PLANLY APP                                  |
+|                                                                             |
+|  +--------------------+   +-----------------------+   +-------------------+ |
+|  | User Interface     |   | State & Action Engine |   | External Services | |
+|  | - Home & Calendar  |-->| - AppStateService     |<--| - Gemini Flash AI | |
+|  | - Pomodoro Clock   |   | - TaskActionService   |   | - Local Alarms    | |
+|  | - Habit Heatmap    |   | - Theme Controller    |   | - AdMob (Optional)| |
+|  +--------------------+   +-----------------------+   +-------------------+ |
+|            |                          |                         |           |
+|            v                          v                         v           |
+|  +------------------------------------------------------------------------+ |
+|  |                      Hive NoSQL Persistence Layer                      | |
+|  |           (Tasks, Subtasks, Habit Logs, Theme Preferences)             | |
+|  +------------------------------------------------------------------------+ |
++-----------------------------------------------------------------------------+
 ```
 
 ---
 
-## 🚀 Getting Started
+## Directory Structure
+
+```
+planly_app/
+├── .devcontainer/                  # VS Code & Codespaces hermetic container
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                 # 4-stage GitHub Actions enterprise pipeline
+│       └── valixis_midnight_automerge.yml # Midnight automated bot
+├── lib/
+│   ├── core/                      # OLED themes, colors, and design tokens
+│   ├── features/tasks/
+│   │   ├── models/                # Task & subtask Hive data models
+│   │   └── ui/                    # Calendar, Focus, Onboarding, & Stats views
+│   ├── services/                  # AI deconstructor, Alarms, AdMob & Hive
+│   └── main.dart                  # Top-level entry point with crash resilience
+├── test/
+│   ├── add_task_screen_test.dart  # AI deconstructor widget tests
+│   ├── pomodoro_focus_test.dart   # Pomodoro countdown timer tests
+│   ├── subtask_engine_test.dart   # Subtask calculation and progress tests
+│   └── task_card_3d_test.dart     # 3D interactive widget tests
+├── Dockerfile                     # Multi-stage hermetic web build
+├── docker-compose.yml             # Local evaluation stack
+├── nginx.conf                     # Production SPA routing & security headers
+├── pubspec.yaml                   # Dependency specification
+└── analysis_options.yaml          # Strict linting & static analysis rules
+```
+
+---
+
+## Environment Variables
+
+| Variable | Description | Required | Default |
+| :--- | :--- | :---: | :--- |
+| `GEMINI_API_KEY` | Google Gemini API key for task deconstruction | No | Empty (Mock fallback) |
+| `ADMOB_ANDROID_BANNER_ID` | Production Google AdMob Android unit ID | No | Empty |
+| `ADMOB_IOS_BANNER_ID` | Production Google AdMob iOS unit ID | No | Empty |
+| `PORT` | Container binding port for Nginx web server | No | `80` (mapped to `8087`) |
+
+---
+
+## Quickstart
 
 ### Prerequisites
-* **Flutter SDK**: `^3.10.0` or higher
-* **Dart SDK**: `^3.0.0`
-* **Android Studio / Xcode**: For device building
+- [Flutter SDK](https://flutter.dev/docs/get-started/install) (`>= 3.24.0`)
+- [Dart SDK](https://dart.dev/get-dart) (`>= 3.5.0`)
+- [Docker & Docker Compose](https://www.docker.com/) (optional)
 
-### Installation Steps
+### Clean-Clone Setup & Local Run
 
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/smiley-13/planly_app.git
-   cd planly_app
-   ```
-
-2. **Install Flutter Packages**
-   ```bash
-   flutter pub get
-   ```
-
-3. **Generate Hive Models**
-   ```bash
-   flutter pub run build_runner build --delete-conflicting-outputs
-   ```
-
-4. **Run the Application**
-   ```bash
-   # Run in debug mode (uses sample Google ad IDs)
-   flutter run
-
-   # Or run with production AdMob identifiers
-   flutter run --dart-define=ANDROID_BANNER_AD_UNIT_ID=ca-app-pub-xxx --dart-define=IOS_BANNER_AD_UNIT_ID=ca-app-pub-yyy
-   ```
-
----
-
-## 🧪 Automated Testing
-
-Planly maintains automated unit and widget test coverage:
 ```bash
-# Run test suite
-flutter test
+# Clone the repository
+git clone https://github.com/VALIXIS/planly_app.git
+cd planly_app
 
-# Run static analysis
-flutter analyze
+# Install dependencies
+flutter pub get
+
+# Run on Chrome
+flutter run -d chrome
+
+# Run on Android / iOS
+flutter run
+```
+
+### Running with Docker
+
+```bash
+# Build and launch the container
+docker compose up -d --build
+
+# Access the application at http://localhost:8087
 ```
 
 ---
 
-## 🔒 Privacy & Offline Guarantee
+## Testing & Coverage
 
-* **100% Local Storage**: All tasks, reflection notes, and categories are saved locally on-device inside private Hive NoSQL storage.
-* **No Remote Account Required**: Planly functions fully without an internet connection or mandatory account creation.
-* **No Third-Party Telemetry**: Planly does not transmit user data, personal notes, or tracking logs to any remote server.
+Run the complete hermetic test suite:
+
+```bash
+# Run all 87 automated tests
+flutter test
+
+# Generate lcov coverage report
+flutter test --coverage
+
+# Run static analysis
+dart analyze lib
+```
+
+All 87 tests execute offline with zero external network or cloud dependencies.
 
 ---
 
-## 📄 License
+## License
 
-This repository is licensed under the [MIT License](LICENSE).
+Proprietary © VALIXIS. All rights reserved.
